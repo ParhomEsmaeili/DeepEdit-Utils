@@ -152,27 +152,6 @@ def dice_score_computation(img_directory, inference_tasks, results_save_dir, job
                     writer.writerow(dice_scores)
             # return dice_scores 
 
-
-
-    # with open(os.path.join(results_save_dir, 'dice_score_results.csv'), newline='') as f:
-    #     dice_score_reader = csv.reader(f, delimiter=' ', quotechar='|')
-    #     first_row = f.readline()
-    #     first_row = first_row.strip()
-    #     #print(first_row)
-    #     #n_cols = first_row.count(',') + 1 
-    #     dice_scores = [[float(j)] if i > 0 else [j] for i,j in enumerate(first_row.split(','))] #[[float(i)] for i in first_row.split(',')]
-    #     #print(dice_scores)
-    #     for row in dice_score_reader:
-    #         row_str_list = row[0].split(',')
-    #         #print(row_str_list)
-    #         for index, string in enumerate(row_str_list):
-    #             if index > 0:
-    #                 dice_scores[index].append(float(string))
-    #             elif index == 0:
-    #                 dice_scores[index].append(string)
-    # #print(dice_scores)
-    # return dice_scores
-
 def dice_score_extraction(results_save_dir):
     with open(os.path.join(results_save_dir, 'dice_score_results.csv'), newline='') as f:
         dice_score_reader = csv.reader(f, delimiter=' ', quotechar='|')

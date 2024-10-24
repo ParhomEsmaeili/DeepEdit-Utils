@@ -1,31 +1,36 @@
 import torch 
 import numpy as np
 from itertools import chain
+import operator
+import functools
+from monai.utils import min_version, optional_import
+
+connected_comp_measure, _ = optional_import("skimage.measure", "0.14.2", min_version)
 
 class MaskGenerator:
-    def __init__(self, click_map_types, gt_map_types, human_measure):
+    def __init__(self, click_map_types, gt_map_types, human_measure, dict_of_class_codes):
         
-        #We use dicts for the following, since each weight-map type may require some parameterisations.
-        self.click_weightmap_types = dict()
-        for key in click_map_types.keys():
-            self.click_weightmap_types[key.title()] = click_map_types[key]     
-        
-        #A dict of the components of the weight-map which may solely originate from the click information/click set.
-        self.gt_weightmap_types = dict()
-        for key in gt_map_types.keys():
-            self.gt_weightmap_types[key.title()] = gt_map_types[key]
-         
-        self.gt_weightmap_types = [i.title() for i in list(gt_map_types.keys())] 
-        #A dict of the components of the weight-map which may originate from the ground truth in relation to the clicks, e.g. the connected component
+        assert type(click_map_types) == list, "Clicking weightmap types selected were not formatted as a list"
+        assert type(gt_map_types) == list, "GT-based weightmap types selected were not formatted as a list"
+        assert type(human_measure) == list, "Human-centric measure selected was not formatted as a list"
+        assert type(dict_of_class_codes) == dict, "Dictionary of class integer codes was not formatted as such."
+
+        self.class_code_dict = dict_of_class_codes
+
+        self.click_weightmap_types = [i.title() for i in click_map_types]
+        #A list of the components of the weight-map which may originate solely from the clicks, e.g. a distance weighting, or an ellipsoid.
+
+        self.gt_weightmap_types = [i.title() for i in gt_map_types] 
+        #A list of the components of the weight-map which may originate from the ground truth in relation to the clicks, e.g. the connected component
         
         self.human_measure = [i.title() for i in human_measure] 
-        #The measure of model performance being implemented, e.g. responsiveness in region of locality/non-worsening elsewhere. This is a list of strings only!
+        #The measure of model performance being implemented, e.g. responsiveness in region of locality/non-worsening elsewhere. 
 
 
         self.supported_click_weightmaps = ['Ellipsoid',
                                             'Cuboid', 
-                                            'Scaled Normalised Euclidean Distance',
-                                            'Exponentialised Scaled Normalised Euclidean Distance',
+                                            'Scaled Euclidean Distance',
+                                            'Exponentialised Scaled Euclidean Distance',
                                             '2D Intersections', 
                                             'None']
         
@@ -33,14 +38,14 @@ class MaskGenerator:
                                         'None']
         
         self.supported_human_measures = ['Local Responsiveness',
-                                        'Non Worsening',
+                                        'Temporal Non Worsening',
                                         'None']
 
-        if any(list(self.click_weightmap_types.keys())) not in self.supported_click_weightmaps:
+        if any(self.click_weightmap_types) not in self.supported_click_weightmaps:
             #Basic assumption is numbers and symbols will not be placed in the string, only potentially a string with non-capitalised words.
             raise Exception("Selected click-based weight map is not supported")
         
-        elif any(list(self.gt_weightmap_types.keys())) not in self.supported_gt_weightmaps:
+        elif any(self.gt_weightmap_types) not in self.supported_gt_weightmaps:
             raise Exception("Selected gt-based weight map is not supported")
         
         elif any(self.human_measure) not in self.supported_human_measures:
@@ -49,227 +54,857 @@ class MaskGenerator:
 
 
 
-    def click_based_weightmaps(self, guidance_points_set, image_dims):
-        #The guidance points set is assumed to be a dictionary covering all classes, with each point being provided as a 2D/3D set of coordinates.
+    def click_based_weightmaps(self, guidance_points_set, guidance_point_parametrisations, include_background, image_dims):
+        #The guidance points set is assumed to be a dictionary covering all classes, with each point being provided as a 2D/3D set of coordinates in a list.
+        #Image dims are assumed to be a list.
+
+        #Guidance point parametrisations is the nested dictionary which contains the parametrisations sorted by mask-type and then by class. 
         
-        list_of_points = list(chain.from_iterable(list(guidance_points_set.values())))
+        assert type(guidance_points_set) == dict, "The generation of click based weightmaps failed due to the guidance points not being in a dict"
+        assert type(guidance_point_parametrisations) == dict, "The generation of click based weightmaps failed due to the guidance point parametrisations not being a dict"
+        assert type(image_dims) == torch.Size, "The generation of click based weightmaps failed due to the image dimensions not being of a torch.Size class"
+        assert type(include_background) == bool, "The generation of click based weightmaps failed due to the include_background parameter not being a bool: True/False"
+
+        for value in guidance_point_parametrisations.values():
+            assert type(value) == dict, "The generation of click based weightmaps failed due to the parametrisations for each weightmap_type field not being a dict"
+        
+        
+
+        # list_of_points = list(chain.from_iterable(list(guidance_points_set.values())))
 
 
-        for item in self.click_weightmap_types.items():
+        #We will obtain cross-class and per-class masks so that we generate cross-class fused, and per-class fused masks.
+
+        cross_class_masks = []
+        
+        per_class_masks = dict() 
+
+        for item in self.click_weightmap_types:
             
-            if item[0] == "Ellipsoid":    
-                mask = torch.zeros(self.image_dims)
+            if item == "Ellipsoid":    
+                
+                #If we only consider a single fused mask, We need to flatten the guidance_point parameterisations for the given mask-level dict (i.e. the dict with class-point combinations).
 
-                mask = self.generate_ellipsoid(list_of_points, item[1], mask)
+                # list_of_guidance_point_parametrisations = list(chain.from_iterable(list(guidance_point_parametrisations[item].values())))
 
-            elif item[0] == "Cuboid":
-                mask = torch.zeros(self.image_dims)
-        
-                mask = self.generate_cuboid(list_of_points, item[1], mask)
+                # mask = self.generate_ellipsoids(list_of_points, list_of_guidance_point_parametrisations, image_dims)
 
-            elif item[0] == "Scaled Normalised Euclidean Distance":
-                #A scaled euclidean-distance that is first normalised by the image dimensions in each relative dimension. 
 
-                #For scale factor = 1, this reduces to the original normalised euclidean distance.
+                '''
+                We would like to generate a cross-class fused, and a per class fused set of masks.
 
-                #Requires parametrisation. 
+                For each class, the masks are pre-fused across intra-class points. Similarly for the cross-class one across all point masks.
+
+                '''
+
+                cross_class_mask, per_class_mask = self.generate_ellipsoids(guidance_points_set,guidance_point_parametrisations[item], include_background, image_dims)
+
+
+                cross_class_masks.append(cross_class_mask)
+
+                for key,val in per_class_mask.items():
+                    per_class_masks[key].append(val) 
+
+            elif item == "Cuboid":
+                
+                #If we only consider a single fused mask, We need to flatten the guidance_point parameterisations for the given mask-level dict (i.e. the dict with class-point combinations).
+                # list_of_guidance_point_parametrisations = list(chain.from_iterable(list(guidance_point_parametrisations[item].values())))
+
+                # mask = self.generate_cuboids(list_of_points, item[1], mask)
+                # masks.append(mask)
+
+                '''
+                We would like to generate a cross-class fused, and a per class fused set of masks.
+
+                For each class, the masks are pre-fused across intra-class points. Similarly for the cross-class one across all point masks.
+
+                '''
+                
+                cross_class_mask, per_class_mask = self.generate_cuboids(guidance_points_set, guidance_point_parametrisations[item], include_background, image_dims)
+
+                cross_class_masks.append(cross_class_masks)
+
+                for key,val in per_class_mask.items():
+                    per_class_masks[key].append(val)
+                
+
+
+            elif item == "Scaled Euclidean Distance":
+                #A scaled euclidean-distance that is scaled in each dimension. 
+
+                #For scale factor = 1, this reduces to the standard euclidean distance.
+
+                #IF we only consider a single fused mask, We need to flatten the guidance_point parameterisations for the given mask-level dict (i.e. the dict with class-point combinations).
+                
+                # list_of_guidance_point_parametrisations = list(chain.from_iterable(list(guidance_point_parametrisations[item].values())))
+
+                '''
+                We would like to generate a cross-class fused, and a per class fused set of masks.
+
+                For each class, the masks are generated across intra-class points, then fused into one mask. Similarly for the cross-class one, but across all point masks.
+
+                '''
+                
+                output_maps = self.generate_euclideans(True, guidance_point_parametrisations, guidance_points_set, include_background, image_dims)  
+                
+                assert type(output_maps) == dict 
+
+                #Output maps are to be a dict with keys = classes, vals = lists of click distance maps.
+
+                fusion_strategy = "Additive"
+
+                for key, map_list in output_maps.items():
+                    per_class_masks[key].append(self.map_fusion(fusion_strategy, map_list)) 
+                 
+                #We flatten all of the point masks into a list and fuse into one mask for the cross-clask mask.
+                cross_class_masks.append(self.map_fusion(fusion_strategy, list(chain.from_iterable(list(output_maps.values() ))))) 
+                # masks.append(mask)
+                
+
+            elif item == "Exponentialised Scaled Euclidean Distance":
+               
+
+                #IF We only consider a single fused mask, need to flatten the guidance_point parameterisations for the given mask-level dict (i.e. the dict with class-point combinations).
+                
+                # list_of_guidance_point_parametrisations_dummy = list(chain.from_iterable(list(guidance_point_parametrisations[item].values())))
+                
+                '''
+                We would like to generate a cross-class fused, and a per class fused set of masks.
+
+                For each class, the masks are generated across intra-class points, exponentiated, then fused into one mask. Similarly for the cross-class one, but across all point masks.
 
                 
-                #Create a weight map for each point and fuse together. 
+                #We assume that the parametrisation also contains the information about the exponentiation parameter. And that it is the last parameter for each point's parametrisation.
+                # 
+                # Therefore it is length (2n + 1) where n = the quantity of parameters provided (1 or 2/3).
+                
+                #We assume that the exponentiation is only performed according to a single parametrisation. Any per dimension modification is to be done within the per-dimension scaling 
+                #of the euclidean distance.
 
-                pass  
+                '''
 
-            elif item[0] == "Exponentialised Scaled Normalised Euclidean Distance":
-                pass 
+                # list_of_guidance_point_parametrisations = [sublist[:-1] for sublist in list_of_guidance_point_parametrisations_dummy]
+                # list_of_exponentiation_parameters = [sublist[-1] for sublist in list_of_guidance_point_parametrisations_dummy]
 
-            elif item[0] == "2D Intersections":
-                mask = self.generate_axial_intersections(list_of_points)
+                dict_of_scale_parametrisations = dict()
+                dict_of_exponentiation_parametrisations = dict()
 
-            elif item[0] == "None":
-                mask = torch.ones(self.image_dims)
+                for class_label, list_of_point_parametrisations in guidance_point_parametrisations.items():
+
+                    dict_of_scale_parametrisations[class_label] = [sublist[:-1] for sublist in list_of_point_parametrisations]
+                    dict_of_exponentiation_parametrisations[class_label] = [sublist[-1] for sublist in list_of_point_parametrisations]
 
 
+                output_maps = self.generate_euclideans(True, dict_of_scale_parametrisations, guidance_points_set, include_background, image_dims)  
+
+                assert type(output_maps) == dict
+                #Output maps is a class-separated dict containing  lists of point separated masks.
+                
+                output_maps = self.exponentiate_map(dict_of_exponentiation_parametrisations, include_background, output_maps)
+
+                assert type(output_maps) == dict
+                #Output maps is a class-separated dict containing lists of point separated masks. 
+
+
+                fusion_strategy = "Additive"
+
+                for key, map_list in output_maps.items():
+
+                    per_class_masks[key].append(self.map_fusion(fusion_strategy, map_list)) #We fuse the intra-class point masks.
+
+                #We flatten all of the point masks into a list and fuse into one mask for the cross-clask mask.
+                cross_class_masks.append(self.map_fusion(fusion_strategy, list(chain.from_iterable(list(output_maps.values() ))))) 
+
+            elif item == "2D Intersections":
+                
+                '''
+                These intersections are pre-fused intra-class according to the set of points.
+                '''
+                output_maps = self.generate_axial_intersections(guidance_points_set, include_background, image_dims)
+                
+                assert type(output_maps) == dict 
+
+                #Output maps is a dict containing class separated point separated masks. 
+                
+                for key, map in output_maps.items():
+
+                    per_class_masks[key].append(map)
+                
+                #We use a union of the bools since it should capture all of the possible axial slices corresponding to the points. 
+
+                fusion_strategy = 'Union'
+                cross_class_masks.append(self.map_fusion(fusion_strategy, list(chain.from_iterable(list(output_maps.values() )))))
+
+                # masks.append(mask)
+
+            elif item == "None":
+                mask = torch.ones(image_dims)
+
+                cross_class_masks.append(mask)
+                
+                for key in self.class_code_dict.keys():
+                    if not include_background:
+                        if key.title() == "Background":
+                            continue 
+                    
+                    per_class_masks[key].append(mask)
             
 
-            
-            
-        return mask 
         
-    def gt_based_weightmaps(self, image_dims):
+        #We then fuse across the cross-class list of masks, and the intra-class lists of masks.
 
-        return mask 
+        cross_class_fused = self.map_fusion('Multiplicative',cross_class_masks)
+        per_class_fused = dict()
+
+        for class_label, sublist in per_class_masks.items():
+            per_class_fused[class_label] = self.map_fusion('Multiplicative', sublist)
+
+        assert type(cross_class_fused) == torch.Tensor
+        assert type(per_class_fused) == dict 
+
+        return (cross_class_fused, per_class_fused) 
+        
+    def gt_based_weightmaps(self, guidance_points_set, include_background, image_dims, gt):
+        
+        assert type(guidance_points_set) == dict, "The generation of gt_based weightmap failed because the guidance points provided were not in class-based dict format"
+        # assert type(class_code_dict) == dict, "The generation of gt_based weightmap failed because the class label - class code mapping was not provided in a dict format"
+        assert type(include_background) == bool, "The generation of gt_based weightmap failed because the include_background parameter was not a bool"
+        assert type(image_dims) == torch.Size, "The generation of gt_based weightmap failed because the image dimensions were not provided in torch.Size datatype"
+        assert type(gt) == torch.Tensor or gt == None, "The generation of the gt_based weightmap failed because the ground truth provided was not a torch tensor or nonetype"
+        assert gt.size() == image_dims, "The image_dims did not match the ground truth size"
+        
+
+        #We will obtain cross-class and per-class masks. 
+
+        cross_class_masks = []
+        per_class_masks = dict() 
+
+        # list_of_points = list(chain.from_iterable(list(guidance_points_set.values())))
+
+        for item in self.gt_based_weightmaps:
+            
+            if item == "Connected Component":
+                
+                cross_class_mask, class_separated_masks, connected_components_dict = self.generate_click_components(include_background, guidance_points_set, gt, self.class_code_dict, image_dims)
+                
+               
+                cross_class_masks.append(cross_class_mask)
+
+                for key in class_separated_masks.keys():
+                    per_class_masks[key] = class_separated_masks[key]
+
+            elif item == "None":
+                
+                mask = torch.ones(image_dims)
+
+                cross_class_masks.append(mask)
+                
+                for key in self.class_code_dict.keys():
+                    if not include_background:
+                        if key.title() == "Background":
+                            continue 
+                        
+                    per_class_masks[key].append(mask)
+                
+
+        #We then fuse across the cross-class list of masks, and the intra-class lists of masks.
+
+        cross_class_fused = self.map_fusion('Multiplicative', cross_class_masks)
+        per_class_fused = dict()
+
+        for class_label, sublist in per_class_masks.items():
+            per_class_fused[class_label] = self.map_fusion('Multiplicative', sublist)
+
+        assert type(cross_class_fused) == torch.Tensor
+        assert type(per_class_fused) == dict 
+
+        return cross_class_fused, per_class_fused  
     
-    def human_measure_weightmap(self, click_based_weightmaps, gt_based_weightmaps):
-        return mask 
+    def human_measure_weightmap(self, click_based_weightmaps, gt_based_weightmaps, human_measure_information, image_dims):
+        '''        
+        The click based weightmaps are a tuple: cross_class_fused weightmap which is fused across all of the selected click-based types, and the per-class ones fused across the selected click-based types
+        Same for the gt based weightmap
+        
+        The human_measure_information is any information required for the human_measure weightmap. In the case of Temporal Non Worsening for example, this would be the set of changed voxels, and the class-split set.
+        '''
+
+        assert type(click_based_weightmaps) == dict 
+        assert type(gt_based_weightmaps) == dict 
+        assert type(human_measure_information) == dict or human_measure_information == None 
+
+        
+
+        if self.human_measure[0].title() == "Local Responsiveness":
+            #If locality is the measure then no change required. We just need to fuse the click based and gt based weightmaps
+
+            cross_class_click_weightmap = click_based_weightmaps[0]
+            cross_class_gt_weightmap = gt_based_weightmaps[0] 
+
+            final_cross_class_weightmap = cross_class_click_weightmap * cross_class_gt_weightmap 
+            
+            per_class_final_weightmaps = dict() 
+            
+            for class_label in click_based_weightmaps[1].keys():
+                
+                per_class_click_weightmap = click_based_weightmaps[1][class_label]
+                per_class_gt_weightmap = gt_based_weightmaps[1][class_label]
+
+                final_weightmap = per_class_click_weightmap * per_class_gt_weightmap 
+
+                per_class_final_weightmaps[class_label] = final_weightmap 
+            
+        
+
+
+
+        elif self.human_measure[0].title() == "Temporal Non Worsening":
+            #If temporal non-worsening is the measure, then we need to invert a locality based mask.
+            
+            #For temporal non-worsening, we also have the set of changed voxels as a bool mask.
+            
+            cross_class_information = human_measure_information[0]
+            cross_class_click_weightmap = click_based_weightmaps[0]
+            cross_class_gt_weightmap = gt_based_weightmaps[0] 
+
+
+            final_cross_class_weightmap = cross_class_click_weightmap * cross_class_gt_weightmap * cross_class_information
+
+            per_class_final_weightmaps = dict() 
+            
+            for class_label in click_based_weightmaps[1].keys():
+                
+                per_class_click_weightmap = click_based_weightmaps[1][class_label]
+                per_class_gt_weightmap = gt_based_weightmaps[1][class_label]
+                per_class_information = human_measure_information[1][class_label]
+
+                final_weightmap = (1 - per_class_click_weightmap * per_class_gt_weightmap) * per_class_information
+
+                per_class_final_weightmaps[class_label] = final_weightmap  
+
+        elif self.human_measure[0].title() == "None":
+
+            final_cross_class_weightmap = torch.ones(image_dims) 
+            
+            per_class_final_weightmaps = dict() 
+            
+            for class_label in click_based_weightmaps.keys():
+                
+                per_class_final_weightmaps[class_label] = torch.ones(image_dims)
+            
+
+                
+
+        assert type(final_cross_class_weightmap) == torch.Tensor 
+        assert type(per_class_final_weightmaps) == dict 
+        
+        return final_cross_class_weightmap, per_class_final_weightmaps
     
 
 
-    def __call__(self, guidance_points_set, image_dims):
+    def __call__(self, guidance_points_set, point_parametrisations, include_background, human_measure_information, image_dims, gt):
+        
+
+        '''
+        In instances where a weightmap subtype is not being used (e.g. click or gt type), the "None" will be the only corresponding selection in that list for the mask generator definition.
+
+        Therefore, in these instances it will just generate tensors of ones.
+        
+        '''
+        
+        '''This call functions accepts the set of guidance points, and a corresponding set of parameterisations for the selected mask types AND corresponding to the given click.
+        It also accepts information about the human_measure, for example with temporal non-worsening it would be the map of changed voxels. It also takes information about whether the
+        background is included.
+        
+        #This takes the dictionary which contains the guidance points for all classes. This set of guidance points will be assumed to be in the same orientation of the images.'''
+
+        assert type(guidance_points_set) == dict
+        
+        '''Ensure that the value for each class key (class name) in the dict is a nested list of the points which are represented as a list of coordinates'''
+
+        for guidance_point_list in guidance_points_set.values():
+
+            if any([type(entry) != list for entry in guidance_point_list]):
+                raise Exception("Non-list entry in the list of guidance points")
+
+        '''Also takes a dictionary which contains the parameterisations for each mask type selected AND for each point.
+        
+        #The structure is therefore a nested dictionary, the upper level is for the mask types, and the nested level is for the set of guidance points. Each class of guidance points has a 
+        #nested list containing the parameterisation for that MASK TYPE AND CLICK.'''
+
+        #Asserting dictionary at the upper level
+        assert type(point_parametrisations) == dict, "Input point parametrisation was not a dictionary"
+
+        #Asserting that each value must also be a dictionary.
+        for value_entry in point_parametrisations.values():
+            assert type(value_entry) == dict, "Mask-level structure in point parameterisation was not a dictionary"
+
+            #Asserting that each value in the dictionary must be a nested list for each segmentation class.  
+            for class_point_parametrisations in value_entry.values():
+                assert type(class_point_parametrisations) == list, "Class-level structure in point parametrisation was not a list"
+
+                for point_level_parametrisation in class_point_parametrisations:
+                    assert type(point_level_parametrisation) == list, "Point-level structure in point parametrisation was not a list"
+        
+
+        ''' Also takes a list containing the dimensions of the image, for which the weight-maps will be created, assumed to be in RAS orientation for 3D images'''
+
+        assert type(image_dims) == torch.Size, "Image dimensions were not in a torch.Size datatype"
+        
+        assert type(human_measure_information) == dict or type(human_measure_information) == None, "Human information was not in the appropriate datatype"
+        
+        assert type(include_background) == bool, "Information about including the background was not provided in the bool format."
+
+        assert type(gt) == torch.Tensor or gt == None, "The ground truth provided was not in the right format, torch.Tensor or NoneType"
+        
+        
+        
+        cross_class_click_weightmaps, per_class_click_weightmaps = self.click_based_weightmaps(guidance_points_set, point_parametrisations, include_background, image_dims)
+
+        click_weightmaps = (cross_class_click_weightmaps, per_class_click_weightmaps)
             
-            #This takes the dictionary which contains the guidance points for all classes. This set of guidance points will be assumed to be in the same orientation of the images. 
             
-            image_dims = image_dims 
-            #A list containing the dimensions of the image, for which the weight-maps will be created, assumed to be in RAS orientation for 3D images.
+        cross_class_gt_weightmaps, per_class_gt_weightmaps = self.gt_based_weightmaps(guidance_points_set, self.class_code_dict, include_background, image_dims, gt)
+
+        gt_weightmaps = (cross_class_gt_weightmaps, per_class_gt_weightmaps)
+
+        cross_class_map, per_class_maps = self.human_measure_weightmap((click_weightmaps, gt_weightmaps, human_measure_information, image_dims))
+        
+        assert type(cross_class_map) == torch.Tensor 
+        assert type(per_class_maps) == dict 
+         
+        return cross_class_map, per_class_maps 
 
 
-            masks = []  
-            masks.append(mask)
+    def generate_click_components(self, include_background, guidance_points_set, gt, class_labels, image_dims):
+        
+        assert type(include_background) == bool, "Generation of connected_component map failed because the include_background parameter was not a bool"
+        assert type(guidance_points_set) == dict, "Generation of connected component containing the click failed due to the points not being provided in a class-separated dict"
+        assert type(image_dims) == torch.Size, "The generation of connected_component map failed because the image dimensions were not provided in torch.Size datatype"
+        assert type(class_labels) == dict, "The generation of connected_component map failed because the class labels provided were not in a dict"
+        assert type(gt) == torch.Tensor, "The generation of connected_component map failed because the ground truth provided was not a torch tensor"
+        assert gt.size() == image_dims, "The image_dims did not match the ground truth size" 
+
+        #The class labels are the integer codes that correspond to the predicted segmentation AND ground truth segmentation label codes for each class.
+        #We assume that the ground truth is fully discrete also.
+
+        #First we extract the connected components for each class in the ground truth, and the number of components for each of those also.
+        
 
 
-            if self.metric_type == "None":
-                #we just want to be able to test that our base utility is still working, so we will use a full tensor of ones as the image mask
-                mask = torch.ones(self.image_size)
+        connected_components_dict = dict() 
 
-            if self.metric_type == "ellipsoid":
+        class_separated_masks = dict() 
 
-                roi_size = np.round(np.array(self.image_size) * self.metric_click_size) 
-                mask = self.mask_apply(guidance_points_set, roi_size, ellipsoid_shape_bool=True)
+        for class_label, class_code in class_labels.items():
+            assert type(class_code) == int, "Generation of connected components containing the clicks failed due to the class code not being an int"
 
-            #We round in the case that we have a decimal dimension size. The roi_size dimensions are also for only one quadrant size (i.e. half in each direction)
+            if not include_background: 
+                if class_label.title() == 'Background':
+                    continue 
+            connected_components_dict[class_label] = self.connected_component_generator(gt, class_code)
 
-            elif self.metric_type == "cuboid":
 
-                roi_size = np.round(np.array(self.image_size) * self.metric_click_size)
-                mask = self.mask_apply(guidance_points_set, roi_size, ellipsoid_shape_bool=False)
+            #If include_background = False then any click in a background will be skipped
+
+
+            #We will find the component for each corresponding click, and then combine them all into one boolean mask.
             
-            elif self.metric_type == "distance":
-
-                mask = self.distance_mask(guidance_points_set)
-
-            elif self.metric_type == "scaled_distance":
-
-                mask = self.scaled_distance_mask(guidance_points_set)
+            #Extracting the point's corresponding connected component.
             
-            elif self.metric_type == "2d_intersections":
+            point_components = [] 
 
-                mask = self.intersection_mask(guidance_points_set)
+            for point in guidance_points_set[class_label]:
             
+                if len(image_dims) == 2:
+                   
+                    point_component_label = connected_components_dict[class_label][0][point[0], point[1]]
 
-            #Compounding factor, in order to restrict the score computation to a sub-region of the image, e.g. based on whether it should only be computed for the connected component a click is placed
-            #in.
-            if self.metric_limiter == "connected_component":
+                elif len(image_dims) == 3:
+                   
+                    point_component_label = connected_components_dict[class_label][0][point[0], point[1], point[2]]
 
-                mask_2 = self.connected_component_mask(guidance_points_set)
-
-            else:
-                #default is that there is no limiter, and so only the original guidance mask is of concern.
-                mask_2 = np.ones(self.image_size)
+                point_component = torch.where(connected_components_dict[class_label][0] == point_component_label, 1, 0) 
+                
+                point_components.append(point_component)
             
 
+            class_separated_masks[class_label] = self.map_fusion('Union', point_components)
+        
 
-            if self.human_measure == "locality":
-                #If locality is the measure then no change required.
-                #output_mask_current_class
-                output_mask = mask 
+        assert type(class_separated_masks) == dict, "The output class separated masks for the click component function were not contained in a dict"
+        
+        for val in class_separated_masks.values():
+            assert type(val) == torch.Tensor, "The class separated masks in the click component function were not torch tensors"
 
-            elif self.human_measure == "temporal_consistency":
-                #If temporal consistency is the measure, then we need to invert the mask.
-                #output_mask_current_class
+        fused_mask = self.map_fusion('Union', list(class_separated_masks.values()))            
 
-            
-                output_mask = 1 - mask
+        assert type(fused_mask) == torch.Tensor, "The output fused mask for the click component mask was not a torch tensor"
 
-            #TODO: add possible combinations of the mask, e.g. temporal consistency requires us to look at the changed voxels which we fused with the image-mask weightings.
-
-
-            # masks[label_class] = output_mask_current_class
-
-            return output_mask
+        return fused_mask, class_separated_masks, connected_components_dict  
+    
 
 
-    def generate_axial_intersections(self, list_of_points):
+    def connected_component_generator(self, gt, class_code):
+        bool_mask = torch.where(gt == class_code, 1, 0)
+
+
+        #First we split the ground truth map into the disconnected components.
+        disconnected_components_map, num_components = connected_comp_measure.label(bool_mask, return_num=True, connectivity=len(gt.size()))
+
+        output_map = torch.from_numpy(disconnected_components_map)
+        
+        assert type(output_map) == torch.Tensor, "Output from the connected component generator was not a torch tensor"
+
+        #Returns a list containing the new labelled map, and corresponding number of components.
+        return [output_map, num_components]
+    
+
+
+
+    def generate_axial_intersections(self, guidance_points_set, include_background, image_dims):
         # Non-parametric, only depends on the axial slices which could've been used to place the click on a 2D monitor. This is only applicable for 3D images!
         
+        assert type(guidance_points_set) == dict, 'Generation of axial slice intersections failed due to the guidance points not being in a dict datatype'
+        assert type(include_background) == bool, 'Generation of axial slice intersections failed due to the include_ background parameter not being a bool'
+        assert type(image_dims) == torch.Size, 'Generation of axial slice intersections failed due to the image dimensions not being provided in a torch.Size datatype'
         #Checking that the image dims are indeed 3 dimensional.
 
-        if len(self.image_dims) < 3:
+        if len(image_dims) < 3:
             raise Exception("Selected 2D Intersections for a 2D image!") 
         
-        mask = torch.zeros(self.image_dims)
-        #We initialise a tensor of zeroes, then we will insert 1s at the axial slices in which clicks could have feasibly been placed! 
+        assert type(guidance_points_set) == dict, "The parameter containing the points was not a class-separated dict"
+        
+        per_class_masks = dict() 
 
-        for point in list_of_points:
-            mask[point[0],:,:] = 1
-            mask[:,point[1],:] = 1
-            mask[:,:,point[2]] = 1
+        for class_label, list_of_points in guidance_points_set.items(): 
+            
+            if not include_background:
+                if class_label.title() == "Background":
+                    continue 
+            
+            mask = torch.zeros(self.image_dims)
+            #We initialise a tensor of zeroes, then we will insert 1s at the axial slices in which clicks could have feasibly been placed! 
 
-        return mask 
+            for point in list_of_points:
+                mask[point[0],:,:] = 1
+                mask[:,point[1],:] = 1
+                mask[:,:,point[2]] = 1
+            
+            per_class_masks[class_label] = mask
+
+        return per_class_masks 
     
-
-    def generate_cuboid(self, list_of_points, scale_parametrisation, mask):
-        #Cuboid requires parameterisation.
-
-        #Parameterisation is a list of scales relative to the image dimension (e.g., 0.1)
-
-        #This should be used to produce the raw quantity of voxels..(e.g. 50 voxels in x, 75 in y, 90 in z for a 500 x 750 x 900 image)
-
-        if len(scale_parametrisation) == 1:
-            parametrisation = torch.round(scale_parametrisation * torch.tensor(mask.size()))
-        else:
-            parametrisation = [torch.round(scale_parametrisation[i] * torch.tensor(mask.size()[i])) for i in range(len(scale_parametrisation))]
-
-        #We assume that the click is being placed in the center of each voxel.
+    def map_fusion(self, fusion_strategy, maps):
+        '''
+        Map fusion function which fuses together a LIST of maps either by pure additive fusion, elementwise multiplication, or by finding the union of booleans
+        '''
+        supported_fusions = ["Additive", "Multiplicative", "Union"]
         
-        for point in list_of_points:
-            #obtain the extreme points of the cuboid which will be assigned as the box region:
-            min_maxes = []
+        assert fusion_strategy.title() in supported_fusions, "Selected fusion strategy is not supported by the image map fusion function"
+
+        if  fusion_strategy == "Additive":
+            summed_output_maps = sum(maps)
             
-            for index, coordinate in enumerate(point):
-                #For each coordinate, we obtain the extrema points.
-                dimension_min = int(max(0, coordinate - parametrisation[index]))
-                dimension_max = int(min(self.image_size[index] - 1, coordinate + parametrisation[index]))
-
-                min_max = [dimension_min, dimension_max] 
-                min_maxes.append(min_max)
-
-            if len(self.image_size) == 2:
-            #If image is 2D            
-                mask[min_maxes[0][0]:min_maxes[0][1], min_maxes[1][0]:min_maxes[1][1]] = 1
-            elif len(self.image_size) == 3:
-                #If image is 3D:
-                mask[min_maxes[0][0]:min_maxes[0][1], min_maxes[1][0]:min_maxes[1][1], min_maxes[2][0]:min_maxes[2][1]] = 1
+            return summed_output_maps/torch.max(summed_output_maps) 
         
-        return mask
+        if fusion_strategy == "Multiplicative":
+
+            product_output_maps = functools.reduce(operator.mul, maps, 1)
+            return product_output_maps/torch.max(product_output_maps)
+        
+        if  fusion_strategy == "Union":
+
+            union_output_maps = sum(maps)
+            return torch.where(union_output_maps > 0, 1, 0)
+
+    def exponentiate_map(self, dict_of_exponentiation_parameters, include_background, maps):
+        '''
+        Returns class-separated dict of lists of point-masks.
+        '''
+        output_maps = dict()
+
+        for class_label, parametrisation in dict_of_exponentiation_parameters.items():
+            
+            if not include_background:
+                if class_label.title() == "Background":
+                    continue 
+        
+            class_maps = maps[class_label]
+
+            output_maps[class_label] = [torch.exp(parametrisation * weight_map) for weight_map in class_maps]
+        
+        return output_maps
+
+    def generate_euclideans(self, is_normalised_bool, scaling_parametrisations_set, guidance_points_set, include_background, image_dims):
+        
+        '''Is_normalised parameter just assesses whether the distances are scaled by the scaling parametrisations
+           Axis scaling parametrisation is the scaling denominator of the summative terms of the euclidean computation.
+        '''
+        assert type(is_normalised_bool) == bool, "Is_normalised bool parameter in euclidean map generation was not a bool"
+        # assert type(additive_fusion_bool) == bool, "Additive Fusion bool parameter in euclidean map generation was not a bool"
+        assert type(guidance_points_set) == dict, "Generation of euclidean map failed because points were not in a class-separated dict"
+        assert type(image_dims) == torch.Size, "Generation of euclidean map failed because the image dimension provided was not torch.Size datatype"
+        assert type(scaling_parametrisations_set) == dict, "Generation of euclidean map failed because the axis scaling parametrisation was not a within a class-separated dict"
 
 
-    def generate_ellipsoid(self, list_of_points, scale_parametrisation, mask):
+        per_class_masks = dict() 
+        # full_set_of_masks = []
+        
+        for class_label, list_of_points in guidance_points_set.items():
+
+            if not include_background:
+                if class_label.title() == "Background":
+                    continue 
+            
+            list_of_scaling_parametrisation = scaling_parametrisations_set[class_label]
+
+            centres = [[coord + 0.5 for coord in centre] for centre in list_of_points]
+
+            
+            intra_class_masks = []
+
+            for i, centre in enumerate(centres):
+                
+                assert type(list_of_scaling_parametrisation[i]) == list, "Generation of euclidean map failed because the axis scaling parametrisation for each point was not a list"
+
+                intra_class_masks.append(self.each_euclidean(is_normalised_bool, list_of_scaling_parametrisation[i], centre, image_dims))
+
+            per_class_masks[class_label] = intra_class_masks
+
+            # full_set_of_masks += intra_class_masks
+            
+
+
+        # assert type(cross_class_mask) == torch.Tensor 
+        assert type(per_class_masks) == dict 
+
+        return per_class_masks
+    
+    def each_euclidean(self, is_normalised, scaling_parametrisation, point, image_dims):
+        
+        '''Is_normalised parameter just assesses whether the distances are scaled by a scaling parametrisation'''
+        assert type(is_normalised) == bool, "Is_normalised parameter in euclidean map generation was not a bool"
+        assert type(point) == list, "Generation of euclidean map failed because point was not a list"
+        assert type(image_dims) == torch.Size, "Generation of euclidean map failed because the image dimension provided was not torch.Size datatype"
+        assert type(scaling_parametrisation) == list, "Scaling parametrisation for the denom terms of the euclidean were not provided in the list format"
+
+
+        if len(scaling_parametrisation) == 1:
+            scaling_parametrisation*= len(image_dims)
+        else:
+            pass
+
+        grids = [torch.linspace(0.5, image_dim-0.5, image_dim) for image_dim in image_dims]
+        meshgrid = torch.meshgrid(grids, indexing='ij')
+
+        if is_normalised:
+            return torch.sqrt(sum([torch.square((meshgrid[i] - point[i])/(scaling_parametrisation[i])) for i, image_dim in enumerate(image_dims)]))
+        else:
+            return torch.sqrt(sum([torch.square(meshgrid[i] - point[i]) for i in range(len(image_dims))]))
+        
+
+    def generate_cuboids(self, guidance_points_set, scale_parametrisation_set, include_background, image_dims):
+        '''
+        Cuboids require parameterisation.
+
+        Parametrisation is a set of raw parameters for each point.
+
+        This parametrisation is the raw quantity of voxels..(e.g. 50 voxels in x, 75 in y, 90 in z) because we might have variations in the actual physical measurement per voxel (e.g. 1 x 10 x 10mm)
+        
+        Returns:
+
+        Cross-class fused mask and a dict of per-class fused masks across the guidance points correspondingly.
+        '''
+        
+        assert type(scale_parametrisation_set) == dict, "Structure of scale parametrisations across classes in cuboid generator was not a dict (with nested lists)"
+        assert type(scale_parametrisation_set) == dict, "Structure of guidance point sets across classes in cuboid generator was not a dict (with nested lists)"
+
+
+        for list_of_scale_parametrisation in scale_parametrisation_set:
+            assert type(list_of_scale_parametrisation) == list, "Structure of scale parametrisations for a given class in cuboid generator was not a list"
+
+            for sublist in list_of_scale_parametrisation:
+
+                assert type(sublist) == list, "Structure of scale parametrisations for each point in cuboid generator was not a list"
+
+        assert type(image_dims) == torch.Size, "Datatype for the image dimensions in cuboid generator was not torch.Size"
+
+
+        #For each class, we generate the per-class fused mask. 
+        per_class_masks = dict()
+
+        for class_label, list_of_points in guidance_points_set.items():
+            
+            if not include_background:
+                if class_label.title() == "Background":
+                    continue 
+            
+            #Initialising the mask:
+            mask = torch.zeros(image_dims)
+
+
+            #Extracting the list of scale parametrisations for the set of points of the given class. 
+
+            list_of_scale_parametrisation = scale_parametrisation_set[class_label]
+
+
+            for point, scale_parametrisation in zip(list_of_points, list_of_scale_parametrisation):
+
+                #shifting the centre to the center of each voxel (where we assume click placement occurs)
+                centre = [coord + 0.5 for coord in point]
+
+
+                '''
+                None of the scale parameterisations should be larger than the 0.5 of the corresponding image dimensions otherwise the box would be larger than the image.
+                '''
+
+
+                if len(scale_parametrisation) == 1:
+                    parametrisation = scale_parametrisation * len(image_dims)
+                else:
+                    parametrisation = scale_parametrisation
+
+                if any(torch.tensor(parametrisation)/torch.tensor(image_dims)) > 0.5:
+                    raise Exception("Scale factors for the cuboid size mean that the dimensions would be larger than the image")
+                
+                
+                #obtain the extreme points of the cuboid which will be assigned as the box region:
+                min_maxes = []
+
+
+                for index, coordinate in enumerate(centre):
+                    #For each coordinate, we obtain the extrema points.
+                    dimension_min = int(max(0, torch.round(coordinate - parametrisation[index])))
+                    dimension_max = int(min(image_dims[index] - 1, torch.round(coordinate + parametrisation[index])))
+
+                    min_max = [dimension_min, dimension_max] 
+                    min_maxes.append(min_max)
+
+
+                if len(self.image_size) == 2:
+                #If image is 2D            
+                    mask[min_maxes[0][0]:min_maxes[0][1], min_maxes[1][0]:min_maxes[1][1]] = 1
+                elif len(self.image_size) == 3:
+                    #If image is 3D:
+                    mask[min_maxes[0][0]:min_maxes[0][1], min_maxes[1][0]:min_maxes[1][1], min_maxes[2][0]:min_maxes[2][1]] = 1
+
+            #Appending the "fused" mask into the per-class mask dict.
+            per_class_masks[class_label] = mask 
+
+        #Fusing the per-class masks into a single cross class mask also.
+        fusion_strategy = "Union"
+
+        cross_class_mask = self.map_fusion(fusion_strategy, list(chain.from_iterable(list(per_class_masks.values() ))))
+
+
+        assert type(cross_class_mask) == torch.Tensor 
+        assert type(per_class_masks) == dict 
+
+        return cross_class_mask, per_class_masks
+
+
+    def generate_ellipsoids(self, guidance_points_set, scale_parametrisations_set, include_background, image_dims):
+        
+        '''
         #Ellipsoid requires parametrisation: There are three options available
+        
 
-        #param_1 only: All dimensions have the same scaling, relative to the corresponding image dimension.
+        #For each point, the following parametrisation configurations are permitted: 
 
-        #param_1/2 or param_1/2/3 indicate separate scalings relative to each corresponding image dimension.
+        #param_1 only: All dimensions have the same scaling
+
+        #param_1/2 or param_1/2/3 indicate separate scalings
+
+        #In instances where it has separate scalings, this is assumed to be a list with length > 1! 
+
+        #All parameters must be smaller than the resolution of the corresponding dimensions.
+
+        #Mask is a torch tensor.
 
 
-        #Ellipsoids is defined in the following manner: (x/a)^2 + (y/b)^2 + (z/c)^2 = 1
+        Inputs: Guidance points sets, split by class. Scale parametrisations set for the guidance points. Whether the background is included: Bool. Image dimensions in the same orientation of the 
+        guidance points.
 
+        Returns:
 
-        if len(scale_parametrisation) == 1:
-            #Ellipsoid is equally scaled relative to the corresponding image dimension.
+        Fused mask of ellipsoids across the classes, and a dict of per_class ellipsoid masks corresponding to the guidance points that were provided.
+        '''
+    
+        assert type(image_dims) == torch.Size, "Image dimensions for the ellipsoid mask generators were not of the torch.Size type"
+        assert type(scale_parametrisations_set) == dict, "scale parametrisation for the ellipsoid mask generators were not of the dict datatype"
+
+        per_class_masks = dict() 
+        fusion_strategy = 'Union'
+
+        for class_label, list_of_points in guidance_points_set.items():
             
-            #We generate each a,b,c by multiplying the scale_parameterisation by the image dimension
-            scale_factor_denoms = torch.round(scale_parametrisation * torch.tensor(mask.size()))
-        else:
-            #It is not scaled equally relative to the corresponding image dimension.
-            scale_factor_denoms = [torch.round(scale_parametrisation[i] * torch.tensor(mask.size()[i])) for i in range(len(scale_parametrisation))] 
+            if not include_background:
+                if class_label.title() == "Background":
+                    continue 
 
-        for point in list_of_points:
-             
+            #Generate the per-class fused mask
+
+            list_of_scale_parametrisation = scale_parametrisations_set[class_label] 
+            
+            assert type(list_of_scale_parametrisation) == list, "List of scale parametrisations in the ellipsoid generator was not a nested list for each class"
+
+            #Collect the set of ellipsoid binary masks
+            ellipsoid_masks = []
+
+            for point, scale_parametrisation in zip(list_of_points, list_of_scale_parametrisation):
+                
+                if len(scale_parametrisation) == 1:
+                    parametrisation = scale_parametrisation * len(image_dims)
+                else:
+                    parametrisation = scale_parametrisation
+
+                if any(parametrisation) > 0.5:
+                    raise Exception("Scale factor too large, axis of ellipse will be larger than the image")
+
+                assert type(scale_parametrisation) == list, "Scale parametrisation for each point for ellipsoid generation was not in a list structure"
+
+                
+                ellipsoid_masks.append(self.each_ellipsoid(point, parametrisation, image_dims))
+                
+                
 
 
-    def check_in_ellipsoid(self,centre, scale_factor_denoms, point, image_dims):
-        #Checking if a point is inside an ellipsoid defined using the centre, and the scale parameters a,b,c.
+            per_class_masks[class_label] = self.map_fusion(fusion_strategy, ellipsoid_masks)
 
+        cross_class_mask = self.map_fusion(fusion_strategy, list(chain.from_iterable(list(per_class_masks.values() ))))
+
+        assert type(cross_class_mask) == torch.Tensor 
+        assert type(per_class_masks) == dict 
+         
+        return cross_class_mask, per_class_masks
+
+
+    def each_ellipsoid(self,centre, scale_factor_denoms, image_dims):
+        #Generating the bool mask outlining the ellipsoid defined using the centre, and the scale parameters corresponding to each image dimension. This ranges from [0, 0.5]
+        
+        
         #Ellipsoids is defined in the following manner: (x-xo/a)^2 + (y-yo/b)^2 + (z-zo/c)^2 = 1 (for 2D the z-term is just dropped)
 
-        #We test the validity of a point by treating point coordinates as being at the center of each voxel.  
-
-        centre = [coord + 0.5 if coord < image_dims[i] else coord - 0.5 for i, coord in enumerate(centre)]
-        point = [coord + 0.5 if coord < image_dims[i] else coord - 0.5 for i, coord in enumerate(point)]
+        #We treat point coordinates as being at the center of each voxel.  
         
-        #finding the difference in each dimension:
-        numerators = [centre[i] - point[i] for i in range(len(centre))]
-        lhs_comp = [(numerators[i]/scale_factor_denoms[i]) for i in range(len(numerators))].sum()
+        #We create a grid of coordinates for the image:
+        grids = [torch.linspace(0.5, image_dim - 0.5, image_dim) for image_dim in image_dims]
 
-        #check if the point lies inside the ellipsoid:
+        #shifting the centre 
+        centre = [coord + 0.5 for coord in centre]
 
-        return lhs_comp <= 1
+        #computing the denominators using the scale_factors for each image_dimension
+        denoms =  scale_factor_denoms #[scale_factor_denoms[i] for i,image_dim in enumerate(image_dims)]
+        
+        #generating the coordinate set
+        
+        # if len(image_dims) == 2:
+        #     meshgrid = torch.meshgrid(grids[0], grids[1], indexing='ij')
+        # else:
+        #     meshgrid = torch.meshgrid(grids[0], grids[1], grids[2], indexing='ij')   
+
+        meshgrid = torch.meshgrid(grids, indexing='ij')
+        
+        lhs_comp = sum([torch.square((meshgrid[i] - centre[i])/denoms[i]) for i in range(len(image_dims))])
+
+        return torch.where(lhs_comp <= 1, 1, 0)
