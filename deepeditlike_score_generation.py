@@ -11,11 +11,12 @@ import re
 from base_human_centric_metric_computation import score_tool
 from score_generation_path_utils import path_generation
 import guidance_points_utils as guide_utils 
+from itertools import chain
 
 class test_scores():
     def __init__(self, args):
 
-        assert self.args == dict, 'Score generation failed because the score generation config was not a dict'
+        assert type(args) == dict, 'Score generation failed because the score generation config was not a dict'
 
 
         #TODO: ADD assertions for each of the fields in the inputs correspondingly. 
@@ -75,7 +76,7 @@ class test_scores():
         supported_base_metrics = ['Dice',
                                 'Error Rate']
         
-        supported_sequentiality_modes = ['CIM'
+        supported_sequentiality_modes = ['CIM',
                                          'SIM']
         
         '''
@@ -133,7 +134,7 @@ class test_scores():
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
         assert len(infer_run_mode) == 1 or len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(include_background_metric) == bool 
         assert type(per_class_scores) == bool 
@@ -154,14 +155,15 @@ class test_scores():
 
         assert human_measure.title() in ["None", "Local Responsiveness"], "The human measure did not match the supported ones"
 
-        
+        num_points = [] #Just checking that the number of points is roughly equal across SIM and CIM modes.
+
         if infer_run_mode[0].title() == "Editing":
 
             editing_score_tool = scoring_tools['Editing']
             initialisation_score_tool = scoring_tools[infer_run_mode[1].title()]
         
 
-            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].title())
+            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].lower())
             
             iteration_folders = [x for x in os.listdir(os.path.join(img_directory_path, 'labels')) if x.startswith('deepedit_iteration')]
             iteration_folders.sort(key=lambda test_string : list(map(int, re.findall(r'\d+', test_string)))[0])
@@ -169,6 +171,10 @@ class test_scores():
             #this is needed because the iterations need to be in order.
 
             for image in image_names:
+
+                #Initialising the number of points list for the given image
+                image_num_points = []
+
                 #Extracting the image name without the file extension:
                 image_no_ext = image.split('.')[0] 
 
@@ -189,9 +195,14 @@ class test_scores():
                 # e.g. is it an editing iteration or an initialisation iteration, and the name of the iteration (e.g. iteration_1, final_iteration, interactive [initialisation], autoseg)
 
                 
-                iter_infos = [[infer_run_mode[1], 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
+                iter_infos = [[infer_run_mode[1].lower(), 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
                 guidance_points_dict_init, guidance_points_init_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict_init.values() )))))
+
+
+
                 #For the generation of the score we do assume that the image has the file type extension included! 
                 
                 cross_class_score_init, per_class_scores_init = initialisation_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict_init, guidance_points_init_parametrisations) # Adding the initialisation score
@@ -201,7 +212,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_init))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -221,6 +232,8 @@ class test_scores():
                     iter_infos = [['deepedit', index + 1]] 
                     guidance_points_dict, guidance_points_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                    #Appending the number of points
+                    image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict.values() )))))
 
                     cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
 
@@ -229,7 +242,7 @@ class test_scores():
 
                     scores['cross_class'].append(float(cross_class_score))
 
-                    for score_key in scores.keys():
+                    for score_key in config_labels.keys():
                         
                         if not include_background_metric:
                             if score_key.title() == "Background":
@@ -243,7 +256,10 @@ class test_scores():
                 
                 iter_infos = [['final', 'dummy']] 
                 guidance_points_final, guidance_final_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
-            
+
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_final.values() )))))
+                num_points.append(image_num_points)
 
                 cross_class_score_final, per_class_scores_dict_final = editing_score_tool([final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
 
@@ -252,7 +268,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_final))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -285,6 +301,10 @@ class test_scores():
             initialisation_score_tool = scoring_tools[infer_run_mode[0].title()]
             for image in image_names:
 
+                #Initialising the number of points list for the given image
+                image_num_points = []
+
+
                 #Extracting the image name without the file extension:
                 image_no_ext = image.split('.')[0] 
 
@@ -305,9 +325,13 @@ class test_scores():
                 # e.g. is it an editing iteration or an initialisation iteration, and the name of the iteration (e.g. iteration_1, final_iteration, interactive [initialisation], autoseg)
 
                 
-                iter_infos = [[infer_run_mode[0], 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
+                iter_infos = [[infer_run_mode[0].lower(), 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
                 guidance_points_dict_init, guidance_points_init_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict_init.values() )))))
+                num_points.append(image_num_points)
+
                 #For the generation of the score we do assume that the image has the file type extension included! 
                 
                 cross_class_score_init, per_class_scores_init = initialisation_score_tool([final_image_folder], gt_image_folder, image, guidance_points_dict_init, guidance_points_init_parametrisations) # Adding the initialisation score
@@ -317,7 +341,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_init))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -346,6 +370,11 @@ class test_scores():
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
+        #flatten and sum the total number of points! use the following function in the debugger to verify the number of points make sense (or manipulate the number of samples used)
+        # def flatten(xss):
+        #   return [x for xs in xss for x in xs]
+        pass 
+        
 
             
     def cim_mode_base_score_computation(self,
@@ -382,7 +411,7 @@ class test_scores():
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
         assert len(infer_run_mode) == 1 or len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(include_background_metric) == bool 
         assert type(per_class_scores) == bool 
@@ -402,13 +431,15 @@ class test_scores():
         
         assert human_measure.title() in ["None", "Local Responsiveness"], "The human measure did not match the supported ones"
         
+        num_points = [] #Just checking that the number of points is roughly equal across SIM and CIM modes.
+
         if infer_run_mode[0].title() == "Editing":
 
             editing_score_tool = scoring_tools['Editing']
             initialisation_score_tool = scoring_tools[infer_run_mode[1].title()]
         
 
-            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].title())
+            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].lower())
             
             iteration_folders = [x for x in os.listdir(os.path.join(img_directory_path, 'labels')) if x.startswith('deepedit_iteration')]
             iteration_folders.sort(key=lambda test_string : list(map(int, re.findall(r'\d+', test_string)))[0])
@@ -416,6 +447,10 @@ class test_scores():
             #this is needed because the iterations need to be in order.
 
             for image in image_names:
+
+                #Initialising the number of points list for the given image
+                image_num_points = []
+
                 #Extracting the image name without the file extension:
                 image_no_ext = image.split('.')[0] 
 
@@ -438,10 +473,13 @@ class test_scores():
                 
                 #For the initialisation, there is no prior iter. 
 
-                iter_infos = [[infer_run_mode[1], 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
+                iter_infos = [[infer_run_mode[1].lower(), 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
                 
                 guidance_points_dict_init, guidance_points_init_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict_init.values() )))))
+
                 #For the generation of the score we do assume that the image has the file type extension included! 
                 
                 cross_class_score_init, per_class_scores_init = initialisation_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict_init, guidance_points_init_parametrisations) # Adding the initialisation score
@@ -451,7 +489,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_init))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -468,12 +506,15 @@ class test_scores():
 
                     #First we extract the guidance points and parametrisations for this iteration:
 
-                    iter_infos += ['deepedit', index + 1] 
+                    iter_infos += [['deepedit', index + 1]] 
                     
                     submitted_iter_infos = iter_infos[-2:]
 
                     guidance_points_dict, guidance_points_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, submitted_iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                    #Appending the number of points
+                    image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict.values() )))))
+
 
                     cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
 
@@ -482,7 +523,7 @@ class test_scores():
 
                     scores['cross_class'].append(float(cross_class_score))
 
-                    for score_key in scores.keys():
+                    for score_key in config_labels.keys():
                         
                         if not include_background_metric:
                             if score_key.title() == "Background":
@@ -494,12 +535,14 @@ class test_scores():
                 #for the final image
                 
                 
-                iter_infos += ['final', 'dummy']
+                iter_infos += [['final', 'dummy']]
 
                 submitted_iter_infos = iter_infos[-2:] 
 
                 guidance_points_final, guidance_final_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, submitted_iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
             
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_final.values() )))))
 
                 cross_class_score_final, per_class_scores_dict_final = editing_score_tool([final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
 
@@ -508,7 +551,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_final))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -537,10 +580,15 @@ class test_scores():
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
+                
+                num_points.append(image_num_points)
 
         else: #In this case, we just have the single iter of inference (an init mode)
             initialisation_score_tool = scoring_tools[infer_run_mode[0].title()]
             for image in image_names:
+                
+                #Initialising the number of points list for the given image
+                image_num_points = []
 
                 #Extracting the image name without the file extension:
                 image_no_ext = image.split('.')[0] 
@@ -562,9 +610,12 @@ class test_scores():
                 # e.g. is it an editing iteration or an initialisation iteration, and the name of the iteration (e.g. iteration_1, final_iteration, interactive [initialisation], autoseg)
 
                 
-                iter_infos = [[infer_run_mode[0], 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
+                iter_infos = [[infer_run_mode[0].lower(), 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
                 guidance_points_dict_init, guidance_points_init_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
+                #Appending the number of points
+                image_num_points.append(len(list(chain.from_iterable(list(guidance_points_dict_init.values() )))))
+
                 #For the generation of the score we do assume that the image has the file type extension included! 
                 
                 cross_class_score_init, per_class_scores_init = initialisation_score_tool([final_image_folder], gt_image_folder, image, guidance_points_dict_init, guidance_points_init_parametrisations) # Adding the initialisation score
@@ -574,7 +625,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_init))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -603,6 +654,12 @@ class test_scores():
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
+                num_points.append(image_num_points)
+        
+        #flatten and sum the total number of points! use the following function in the debugger to verify the number of points make sense (or manipulate the number of samples used)
+        # def flatten(xss):
+        #   return [x for xs in xss for x in xs]
+        pass 
 
     def sim_temporal_computation(self,
                                scoring_tools, 
@@ -641,7 +698,7 @@ class test_scores():
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
         assert len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(include_background_metric) == bool 
         assert type(per_class_scores) == bool 
@@ -674,7 +731,7 @@ class test_scores():
             # initialisation_score_tool = scoring_tools[infer_run_mode[1].title()]
         
 
-            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].title())
+            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].lower())
             
             iteration_folders = [x for x in os.listdir(os.path.join(img_directory_path, 'labels')) if x.startswith('deepedit_iteration')]
             iteration_folders.sort(key=lambda test_string : list(map(int, re.findall(r'\d+', test_string)))[0])
@@ -729,7 +786,7 @@ class test_scores():
 
                     scores['cross_class'].append(float(cross_class_score))
 
-                    for score_key in scores.keys():
+                    for score_key in config_labels.keys():
                         
                         if not include_background_metric:
                             if score_key.title() == "Background":
@@ -752,7 +809,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_final))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -815,7 +872,7 @@ class test_scores():
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
         assert len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(include_background_metric) == bool 
         assert type(per_class_scores) == bool 
@@ -841,7 +898,7 @@ class test_scores():
             # initialisation_score_tool = scoring_tools[infer_run_mode[1].title()]
         
 
-            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].title())
+            initialisation_folder = os.path.join(img_directory_path, 'labels', infer_run_mode[1].lower())
             
             iteration_folders = [x for x in os.listdir(os.path.join(img_directory_path, 'labels')) if x.startswith('deepedit_iteration')]
             iteration_folders.sort(key=lambda test_string : list(map(int, re.findall(r'\d+', test_string)))[0])
@@ -878,7 +935,7 @@ class test_scores():
 
                     #First we extract the guidance points and parametrisations for this iteration:
 
-                    iter_infos += ['deepedit', index + 1] 
+                    iter_infos += [['deepedit', index + 1]] 
                     
                     submitted_iter_infos = iter_infos[-2:]
 
@@ -898,7 +955,7 @@ class test_scores():
 
                     scores['cross_class'].append(float(cross_class_score))
 
-                    for score_key in scores.keys():
+                    for score_key in config_labels.keys():
                         
                         if not include_background_metric:
                             if score_key.title() == "Background":
@@ -910,7 +967,7 @@ class test_scores():
                 #for the final image
                 
                 
-                iter_infos += ['final', 'dummy']
+                iter_infos += [['final', 'dummy']]
 
                 submitted_iter_infos = iter_infos[-2:] 
 
@@ -924,7 +981,7 @@ class test_scores():
 
                 scores['cross_class'].append(float(cross_class_score_final))
 
-                for score_key in scores.keys():
+                for score_key in config_labels.keys():
                     
                     if not include_background_metric:
                         if score_key.title() == "Background":
@@ -990,7 +1047,7 @@ class test_scores():
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
         assert len(infer_run_mode) == 1 or len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(per_class_scores) == bool 
         assert type(include_background_metric) == bool 
@@ -1045,9 +1102,9 @@ class test_scores():
         '''
         assert type(scoring_tools) == dict 
         assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
-        assert len(infer_run_mode) == 1 or len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
+        assert len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
         assert type(weightmap_parametrisations) == dict 
-        assert type(human_measure) == bool 
+        assert type(human_measure) == str 
         assert type(base_metric) == str
         assert type(per_class_scores) == bool 
         assert type(include_background_metric) == bool 
@@ -1081,7 +1138,7 @@ class test_scores():
         inference_config_dict['inference_run_config'] = self.infer_run_mode
         
         inference_config_dict['dataset_name'] = self.studies
-        inference_config_dict['dataset_subset'] = 'test'
+        inference_config_dict['dataset_subset'] = self.dataset_subset
         
         inference_config_dict['datetime'] = self.datetime
         inference_config_dict['checkpoint'] = self.checkpoint
@@ -1101,16 +1158,16 @@ class test_scores():
         supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_sequentiality_modes = self.supported_configs()
 
 
-        if any(list(self.click_weightmaps_dict.keys())) not in supported_click_weightmaps:
+        if any([weightmap not in supported_click_weightmaps for weightmap in self.click_weightmaps_dict.keys()]):
             raise ValueError("The selected click weightmap types are not currently supported")
         
-        if any(self.gt_weightmap_types) not in supported_gt_weightmaps:
+        if any([weightmap not in supported_gt_weightmaps for weightmap in self.gt_weightmap_types]):
             raise ValueError("The selected gt weightmap types are not currently supported")
 
         if self.human_measure not in supported_human_measures:
             raise ValueError("The selected human measure is not currently supported")
         
-        if len(self.infer_run_mode == 1):
+        if len(self.infer_run_mode) == 1:
             if self.infer_run_mode[0] not in supported_initialisations:
                 raise ValueError("The selected initialisation strategy was not supported")
         else:
@@ -1131,7 +1188,7 @@ class test_scores():
 
         #Generation of the paths required for extracting the (segmentations, guidance point sets, guidance point parametrisations etc.) and the path for saving the results.
 
-        path_generation_class = path_generation(metric_config_dict, inference_config_dict)
+        path_generation_class = path_generation(inference_config_dict, metric_config_dict)
 
         inference_output_dir_path, results_save_dir = path_generation_class()
 
@@ -1144,7 +1201,7 @@ class test_scores():
 
         #We extract the dictionary of class-label - class-code correspondences. This should be located in the upper folder for the dataset at hand.
 
-        label_config_path = os.path.join(self.app_dir_path, self.studies, 'label_configs.txt')
+        label_config_path = os.path.join(self.app_dir_path, 'datasets', self.studies, 'label_configs.txt')
         
         assert os.path.exists(label_config_path)
         ################### Importing the class label configs dictionary #####################
@@ -1162,28 +1219,29 @@ class test_scores():
 
         #############################################################################################
 
-        #Initialising the score generation tool. We need to merge all of the weightmap types into one list for this (from both click and gt based weightmaps).
+        #Initialising the score generation tool. 
 
-        weightmap_types = list(self.click_weightmaps_dict.keys()) + self.gt_weightmap_types 
-
+        # weightmap_types = list(self.click_weightmaps_dict.keys()) + self.gt_weightmap_types 
+        click_weightmap_types = list(self.click_weightmaps_dict.keys())
+        gt_weightmap_types = self.gt_weightmap_types
 
         #IF there is an autoseg mode, OR, if we are computing for an autoseg init. then we need to allow for side-stepping of the fact that there is no guidance points/parametrisations applicable
 
         if self.infer_run_mode[0].title() == "Autoseg":
-            metric_computer_tools = {"Autoseg":score_tool(config_labels, ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+            metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
         
         if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Autoseg":
-            metric_computer_tools = {"Autoseg":score_tool(config_labels, ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
-                                     "Editing":score_tool(config_labels, self.human_measure, weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+            metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
+                                     "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
                                     }   
         
         if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Interactive":
-            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
-                                     "Editing":score_tool(config_labels, self.human_measure, weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
+                                     "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
                                     } 
         if self.infer_run_mode[0].title() == "Interactive":
 
-            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
 
     
 

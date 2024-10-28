@@ -1,4 +1,4 @@
-from deepeditlike_score_generation import test_scores 
+from score_merging import score_merging_class
 
 if __name__ == '__main__':
 
@@ -6,7 +6,7 @@ if __name__ == '__main__':
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
     args['datetime'] = "10072024_201348"  #The name of the model datetime which is under consideration
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
-    args["inference_run_num"] = '0'  #The number of the inference run which is under consideration (for probabilistic simulation of clicks at inference)
+    args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
     args['inference_run_parametrisation'] = {
         "None":["None"]
     } 
@@ -41,21 +41,21 @@ if __name__ == '__main__':
     
     args['app_dir'] = 'DeepEditPlusPlus Development/DeepEditPlusPlus' #The path to the app directory from the base/home directory.
 
-    args['include_background_mask'] = True #The bool which determines whether we use the background points for generating the weighting mask
+    # args['include_background_mask'] = True #The bool which determines whether we use the background points for generating the weighting mask
 
     args['include_background_metric'] = False #The bool which determines whether we use the background class for generating and outputting, multi-class and per class scores. 
     
-    args['ignore_empty'] = True #The bool which determines whether we ignore the scores for instances where there is no denominator (because there was no ground truth) 
+    # args['ignore_empty'] = True #The bool which determines whether we ignore the scores for instances where there is no denominator (because there was no ground truth) 
 
     args['per_class_scores'] = True #The bool which determines whether we generate multi-class AND per class scores, or not.
     
-    args['sequentiality_mode'] = 'CIM' #The argument which determines whether we are working with CIM or SIM based models (even for the default score computations we just assume SIM)
+    # args['sequentiality_mode'] = 'CIM' #The argument which determines whether we are working with CIM or SIM based models (even for the default score computations we just assume SIM)
     
     args['dataset_subset'] = 'validation' #The argument which determines whether we are computing scores for the validation outputs, or for the test segmentation outputs. 
 
-    score_generator = test_scores(args)
+    score_collector = score_merging_class(args)
 
-    score_generator() 
+    score_collector() 
 
 
     

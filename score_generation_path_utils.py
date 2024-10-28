@@ -1,14 +1,15 @@
 import os 
+from pathlib import Path 
 
 class path_generation():
     '''
     Class containing the methods which are used for the generation of paths during score generation.
 
-    This includes the paths for extracting segmentations, guidance points, guidance point parametrisations and also for saving the results according to the metrics/parametrisations used.
+    This includes the paths for extracting the folder/diecty containing segmentations, guidance points, guidance point parametrisations and also a path for saving the results according to the metrics/parametrisations used.
     
     '''
 
-    def __init__(self, metric_conf_dict, inference_conf_dict):
+    def __init__(self, inference_conf_dict, metric_conf_dict):
         self.metric_conf_dict = metric_conf_dict 
         self.inference_conf_dict = inference_conf_dict 
 
@@ -47,17 +48,17 @@ class path_generation():
         if conf_dict['inference_run_config'][0].title() == "Editing":
             #In this case, we are implementing init. + editing inference runs.
 
-            initialisation = conf_dict['inference_run_config'][1]
+            initialisation = conf_dict['inference_run_config'][1].title()
             num_editing_iters = conf_dict['inference_run_config'][2] 
 
             
-            inference_run_subtype = conf_dict['dataset_name'] + f'/{conf_dict['dataset_subset']}/{conf_dict['datetime']}/{conf_dict['checkpoint']}/{initialisation}_initialisation_{num_editing_iters}_editing_iters'
+            inference_run_subtype = conf_dict['dataset_name'] + f"/{conf_dict['dataset_subset']}/{conf_dict['datetime']}/{conf_dict['checkpoint']}/{initialisation}_initialisation_{num_editing_iters}_edit_iters"
             
             if click_parametrisation_type.title() == "None":
 
                 #In this case, it is the default behaviour, there is no click size parametrisation.
 
-                final_inference_run_subtype = os.path.join(inference_run_subtype, conf_dict['run_infer_string'])
+                final_inference_run_subtype = os.path.join(inference_run_subtype, "No Click Param", conf_dict['run_infer_string'])
 
 
                 
@@ -79,11 +80,11 @@ class path_generation():
         else:
             #In this case, we are implementing just an initialisation inference run.
 
-            inference_run_subtype = conf_dict['dataset_name'] + f'/{conf_dict['dataset_subset']}/{conf_dict['datetime']}/{conf_dict['checkpoint']}/{conf_dict['inference_task']}_initialisation'
+            inference_run_subtype = conf_dict['dataset_name'] + f"/{conf_dict['dataset_subset']}/{conf_dict['datetime']}/{conf_dict['checkpoint']}/{conf_dict['inference_run_config'][0].title()}_initialisation"
 
             if click_parametrisation_type.title() == "None":
                 
-                final_inference_run_subtype = os.path.join(inference_run_subtype, conf_dict['run_infer_string'])
+                final_inference_run_subtype = os.path.join(inference_run_subtype, "No Click Param", conf_dict['run_infer_string'])
 
             elif click_parametrisation_type.title() == "Fixed Click Size":
                 #In this case, there is an additional part of the subpath which denotes FIXED click size, and the parametrisation across the image dimensions.
@@ -99,7 +100,7 @@ class path_generation():
         
         full_path = os.path.join(conf_dict['app_dir'], inference_output_subdirectory)
 
-        assert os.path.exists(full_path), 'The subdirectory does not exist!'
+        # assert os.path.exists(full_path), 'The subdirectory does not exist!'
 
         return full_path, final_inference_run_subtype 
     
@@ -137,10 +138,19 @@ class path_generation():
 
 
         #Putting all of the configurations together into a path.
-        full_metric_configuration_path = os.path.join(conf_dict_2['base_metric'], conf_dict_2['human_measure'], click_weightmap_type_path, gt_weightmap_type_path)
+        full_metric_configuration_path = os.path.join(conf_dict_2['base_metric'], f"human_measure_{conf_dict_2['human_measure']}", click_weightmap_type_path, gt_weightmap_type_path)
 
         #obtaining the full path for saving the results
-        results_save_dir = os.path.join(conf_dict_1['app_dir'], f'{conf_dict_1['dataset_subset']}_results', full_metric_configuration_path, inference_run_subtype) 
+
+        #Extracting just the datetime/inference run info, not the dataset name etc again 
+        
+        infer_run_subtype_info = str(Path(*Path(inference_run_subtype).parts[2:]))
+        results_save_dir = os.path.join(conf_dict_1['app_dir'], 'datasets', conf_dict_1["dataset_name"], f"{conf_dict_1['dataset_subset']}_results", full_metric_configuration_path, infer_run_subtype_info) 
+
+        # if os.path.exists(results_save_dir):
+        #     os.rmdir(results_save_dir)
+
+        # os.makedirs(results_save_dir) 
 
         return results_save_dir
 

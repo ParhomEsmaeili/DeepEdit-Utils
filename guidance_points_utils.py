@@ -38,7 +38,7 @@ def guidance_dict_info(guidance_json_folder, image_name_no_ext, iteration_info, 
         init_types = ['autoseg', 'interactive']
         final_types = ['final']
 
-        assert all(iteration_types) in edit_types + init_types + final_types, "The iteration type was not a valid one for the json file name"
+        assert all([iter_type in edit_types + init_types + final_types for iter_type in iteration_types]), "The iteration type was not a valid one for the json file name"
 
         #Generating the guidance json paths and extracting the dicts containing the corrective clicks! 
 
@@ -49,10 +49,14 @@ def guidance_dict_info(guidance_json_folder, image_name_no_ext, iteration_info, 
                 
                 guidance_json_path = os.path.join(guidance_json_folder, f'{iteration_types[0]}_iteration_{iteration_names[0]}.json')   
 
-            elif iteration_types[0] in init_types or iteration_types[0] in final_types:
+            elif iteration_types[0] in init_types:
                 
                 guidance_json_path = os.path.join(guidance_json_folder, f'{iteration_types[0]}.json')
+            
+            elif iteration_types[0] in final_types:    
                 
+                guidance_json_path = os.path.join(guidance_json_folder, f'{iteration_types[0]}_iteration.json')
+
             else:
                 raise ValueError("Missing iteration type")
         
@@ -84,7 +88,7 @@ def guidance_dict_info(guidance_json_folder, image_name_no_ext, iteration_info, 
                 guidance_json_path_1 = ''
                 guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[0]}.json')
 
-            if all(iteration_types) in edit_types:
+            elif all([iter_type in edit_types for iter_type in iteration_types]):
                 #In this case then it is being compared between editing iterations
                 guidance_json_path_1 = os.path.join(guidance_json_folder, f'{iteration_types[0]}_iteration_{iteration_names[0]}.json')   
                 guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[1]}_iteration_{iteration_names[1]}.json')
@@ -98,12 +102,12 @@ def guidance_dict_info(guidance_json_folder, image_name_no_ext, iteration_info, 
             elif iteration_types[0] in init_types and iteration_types[1] in final_types:
                 #In this case it is between an init type and a final type (i.e. where there is one iteration of editing)
                 guidance_json_path_1 = os.path.join(guidance_json_folder, f'{iteration_types[0]}.json')
-                guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[1]}.json')
+                guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[1]}_iteration.json')
 
             elif iteration_types[0] in edit_types and iteration_types[1] in final_types:
                 #In this case it is between an editing iteration, and the final editing iteration.
                 guidance_json_path_1 = os.path.join(guidance_json_folder, f'{iteration_types[0]}_iteration_{iteration_names[0]}.json')
-                guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[1]}.json')
+                guidance_json_path_2 = os.path.join(guidance_json_folder, f'{iteration_types[1]}_iteration.json')
 
             else:
                 raise ValueError("Missing iteration type")
@@ -122,7 +126,7 @@ def guidance_dict_info(guidance_json_folder, image_name_no_ext, iteration_info, 
             elif os.path.exists(guidance_json_path_2) and not os.path.exists(guidance_json_path_1):
                 #I.e. if init, then path 1 is non existent. In this case it requires path 2 (the init) to exist however, and so it can only apply to the interactive init.
                 with open(guidance_json_path_2, 'r') as f:
-                    guidance_points_2 = copy.deepcopy(json.load(f))
+                    guidance_points_2 = copy.deepcopy(copy.deepcopy(json.load(f))[image_name_no_ext])
 
                 guidance_points_1 = dict()
 
@@ -197,7 +201,12 @@ def  guidance_parametrisation_generator(guidance_points_dict, weightmap_parametr
             for class_label, nested_list_of_points in guidance_points_dict.items(): 
                 
                 #Initialise the nested list for the current class label: 
-                class_wide_params_list = [parametrisations] * len(nested_list_of_points) #Multiplied by the length of the nested list of points for each class.
+                if len(nested_list_of_points) > 0: 
+                    class_wide_params_list = [parametrisations] * len(nested_list_of_points) #Multiplied by the length of the nested list of points for each class.
+
+                else:
+                    #There may be instances where specific click sets are empty for certain classes. In this situation we need a dummy parametrisation. 
+                    class_wide_params_list = [parametrisations]
 
                 weightmap_type_dict[class_label] = class_wide_params_list 
 

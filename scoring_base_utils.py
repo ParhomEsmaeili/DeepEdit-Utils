@@ -20,10 +20,10 @@ class ScoreUtils:
             raise Exception("Selected metric base is not supported")
 
         if self.score_base == "Dice":
-            self.base_class = DiceScoreUtils
+            self.base_class = DiceScoreUtils()
 
         elif self.score_base == "Error Rate":
-            self.base_class = ErrorRateUtils 
+            self.base_class = ErrorRateUtils() 
 
     def __call__(self, image_masks, pred, gt):
 
@@ -51,13 +51,15 @@ class DiceScoreUtils:
         assert type(image_masks) == tuple, 'Dice score generation failed because image_masks were not presented in a tuple consisting of a cross-class mask and a class separated dict of masks'
         assert type(image_masks[0]) == torch.Tensor, 'Dice score generation failed because the cross-class mask was not a torch.Tensor'
         assert type(image_masks[1]) == dict, 'Dice score generation failed because the per-class mask parameter was not a class-separated dict.'
+        assert type(pred) == torch.Tensor, 'Dice score generation failed because the prediction mask was not a torch tensor'
+        assert type(gt) == torch.Tensor, 'Dice score generation failed because the gt mask was not a torch tensor'
+        assert type(dict_class_codes) == dict,' "Dice score generation failed because the class label configs were not a dictionary of label-code pairs'
 
-    
         #For multi-class (or binary class where self-include background is TRUE)
 
         #We weight this according to the class-separated image_masks.  
 
-        cross_class = self.dice_score_multiclass(ignore_empty, include_background, pred, gt, image_masks[0]) 
+        cross_class = self.dice_score_multiclass(ignore_empty, include_background, pred, gt, image_masks[0],dict_class_codes) 
 
         per_class_scores = dict() 
         
@@ -84,10 +86,10 @@ class DiceScoreUtils:
         y_o = torch.sum(torch.where(class_sep_gt > 0, 1, 0) * image_mask)
         y_hat_o = torch.sum(torch.where(class_sep_pred > 0, 1, 0) * image_mask)
         
-        weighted_pred = class_sep_pred * image_mask 
+        # weighted_pred = class_sep_pred * image_mask 
         # weighted_gt = class_sep_gt * image_mask 
 
-        intersection = torch.sum(torch.masked_select(weighted_pred, torch.where(class_sep_pred == class_sep_gt, 1, 0) > 0))
+        intersection = torch.sum(torch.masked_select(image_mask, class_sep_pred * class_sep_gt > 0))
 
         if y_o > 0:
             return torch.tensor([(2 * intersection)/(y_o + y_hat_o)])
@@ -103,7 +105,7 @@ class DiceScoreUtils:
         #else:
         return torch.tensor([0.0])
     
-    def dice_score_multiclass(self, ignore_empty, include_background, pred, gt, image_mask):
+    def dice_score_multiclass(self, ignore_empty, include_background, pred, gt, image_mask, dict_class_codes):
 
         '''
         image mask here is the cross-class image mask.
@@ -122,7 +124,7 @@ class DiceScoreUtils:
             intersection = 0
             
             
-            for class_label, class_code in self.dict_class_codes.items():
+            for class_label, class_code in dict_class_codes.items():
                 
                 if not include_background:
                     if class_label.title() == 'Background':
@@ -133,9 +135,10 @@ class DiceScoreUtils:
                 
                 gt_channel = torch.where(gt == class_code, 1, 0) 
 
+                # weighted_pred = pred_channel * image_mask 
                 #The voxel values have already been weighted by the corresponding values in the image mask, so that when we sum it already contains the weight.
 
-                intersection += torch.sum(torch.masked_select(image_mask, torch.where(pred_channel == gt_channel, 1, 0) > 0 )) #* torch.masked_select(image_mask, gt_channel > 0))
+                intersection += torch.sum(torch.masked_select(image_mask, pred_channel * gt_channel > 0 )) #* torch.masked_select(image_mask, gt_channel > 0))
                               
 
             return torch.tensor([(2.0 * intersection) / (y_o + y_hat_o)])
@@ -151,10 +154,10 @@ class DiceScoreUtils:
             return torch.tensor([1.0])
         return torch.tensor([0.0])
 
-    def __call__(self, ignore_empty, include_background, include_per_class_scores, image_mask, pred, gt, dict_class_codes):
+    def __call__(self, ignore_empty, include_background, include_per_class_scores, image_masks, pred, gt, dict_class_codes):
         
         
-        (overall_score, per_class_scores) = self.dice_score(ignore_empty, include_background, include_per_class_scores, image_mask, pred, gt, dict_class_codes)
+        (overall_score, per_class_scores) = self.dice_score(ignore_empty, include_background, include_per_class_scores, image_masks, pred, gt, dict_class_codes)
         
         return {"overall score":overall_score, "per class scores":per_class_scores}    
     
@@ -243,11 +246,11 @@ class ErrorRateUtils:
             return torch.tensor([float(0)])
 
 
-    def __call__(self, ignore_empty, include_background, include_per_class_scores, image_mask, pred, gt, dict_class_codes):
+    def __call__(self, ignore_empty, include_background, include_per_class_scores, image_masks, pred, gt, dict_class_codes):
         
 
         # (overall_score, per_class_scores) = self.error_rate(ignore_empty, image_mask, pred, gt, num_classes)
 
-        (overall_score, per_class_scores) = self.error_rate(ignore_empty, include_background, include_per_class_scores, image_mask, pred, gt, dict_class_codes)
+        (overall_score, per_class_scores) = self.error_rate(ignore_empty, include_background, include_per_class_scores, image_masks, pred, gt, dict_class_codes)
         
         return {"overall score":overall_score, "per class scores":per_class_scores} 

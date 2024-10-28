@@ -1,0 +1,9 @@
+
+#Need to create a folder outside of the current one which you should be cd'd into called binarised (or whatever dummy name).
+
+Then use the following command in the terminal:
+
+for file in ./*nii.gz; do fslmaths $(basename $file) -add 1 -uthr 1.1 -mul -1 -add 1 ./binarised/$(basename $file) -odt int; done
+
+
+This is assumed to only be applied to nii.gz file type images. 
