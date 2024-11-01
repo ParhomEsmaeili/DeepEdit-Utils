@@ -38,11 +38,10 @@ def validation_score_computation(file_path, num_epochs):
         return metric_names, final_datasets
 
 def parse_arguments():
-    parser = argparse.ArgumentParser("Data Preprocessing")
-    parser.add_argument("--datetime", default="10052024_152926")
-    parser.add_argument("--studies", default="models")
-    parser.add_argument("--num_epochs", default='1')
-    parser.add_argument("--csv_folder", default='external_validation')
+    parser = argparse.ArgumentParser("External Validation Score Processing")
+    parser.add_argument("--datetime", default="20241031_230425")
+    parser.add_argument("--model_dir", default="models")
+    parser.add_argument("--num_epochs", default='211')
     return parser
 
 
@@ -54,14 +53,15 @@ if __name__ == '__main__':
     parser = parse_arguments()
     args = parser.parse_args()
     
-    study_folder = os.path.join(args.datetime, args.studies)
+    model_version_folder = os.path.join(args.datetime, args.model_dir)
 
     # print(type(args.num_epochs))
 
-    file_directory = os.path.join(os.path.expanduser('~'), args.csv_folder, study_folder, 'validation_scores','validation.csv')
-    metric_names, val_scores = validation_score_computation(file_directory, int(args.num_epochs))
+    app_dir = os.path.join(os.path.expanduser('~'), 'DeepEditPlusPlus Development', 'DeepEditPlusPlus', 'external_validation')
+    file_directory = os.path.join(app_dir, model_version_folder, 'validation_scores')
+    metric_names, val_scores = validation_score_computation(os.path.join(file_directory, 'validation.csv'), int(args.num_epochs))
 
-    logdir_path = os.path.join(os.path.expanduser('~'), args.csv_folder, study_folder, 'tensorboard_files')
+    logdir_path = os.path.join(file_directory, 'tensorboard_files')
     if not os.path.exists(logdir_path):
         os.makedirs(logdir_path)
     writer = SummaryWriter(log_dir=logdir_path)
@@ -69,10 +69,10 @@ if __name__ == '__main__':
     for index, metric_list in enumerate(val_scores):
         metric_name = metric_names[index]
         for epoch, score in metric_list:
-            print(epoch, score)
-            # print(type(epoch))
-            # print(type(score))
-            print(metric_name)
+            # print(epoch, score)
+            # # print(type(epoch))
+            # # print(type(score))
+            # print(metric_name)
             writer.add_scalar(metric_name + '_val', score, epoch)
 
 

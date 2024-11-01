@@ -710,7 +710,7 @@ class test_scores():
         
         assert sequentiality_mode in ['SIM'], "The sequentiality mode was not supported for metric computation. It should only be for the SIM (1 iter assumed)"
 
-        assert human_measure.title() in ["Temporal Non Worsening"], "The human measure did not match the supported ones"
+        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening"], "The human measure did not match the supported ones"
 
         #For temporal consistency measurement scores, this only applies to inference runs with iterative refinement. NOT for methods with only one iteration.
         
@@ -774,12 +774,37 @@ class test_scores():
                     if index == 0:
                         #In this case it is the first editing iteration, and so we use the init folder, and the first iteration folder. 
 
-                        cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        #If temporal consistency score
+                        if self.human_measure == 'Temporal Non Worsening':
+                            cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        elif self.human_measure == "Local Responsiveness":
+                            #In this case, we want to find the pre and post-click segmentation scores weighted by the mask for the given iteration.
+                            cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score = cross_class_score_post_click - cross_class_score_pre_click 
+                            
+                            per_class_scores_dict = dict() 
+
+                            for class_label in per_class_scores_dict_pre_click.keys():
+                                per_class_scores_dict[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
 
                     else:
                         #In this case it is a non-first editing iteration, iteration. So we just use the current and prior iteration folders. 
-                        cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        
+                        #If temporal consistency score
+                        if self.human_measure == 'Temporal Non Worsening':
+                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        
+                        elif self.human_measure == "Local Responsiveness":
+                            #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
+                            cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1])], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index])], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score = cross_class_score_post_click - cross_class_score_pre_click 
+                            
+                            per_class_scores_dict = dict() 
 
+                            for class_label in per_class_scores_dict_pre_click.keys():
+                                per_class_scores_dict[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
 
                     assert type(cross_class_score) == torch.Tensor
                     assert type(per_class_scores_dict) == dict 
@@ -799,10 +824,26 @@ class test_scores():
                 
                 
                 iter_infos = [['final', 'dummy']] 
-                guidance_points_final, guidance_final_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
-            
 
-                cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                
+                guidance_points_final, guidance_final_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
+                
+                if self.human_measure == "Temporal Non Worsening":
+                    cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+
+                elif self.human_measure == "Local Responsiveness":
+                    
+                    #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
+                    cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1])], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                    cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                    cross_class_score_final = cross_class_score_post_click - cross_class_score_pre_click 
+                    
+                    per_class_scores_dict_final = dict() 
+
+                    for class_label in per_class_scores_dict_pre_click.keys():
+                        per_class_scores_dict_final[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
+
+                
 
                 assert type(cross_class_score_final) == torch.Tensor
                 assert type(per_class_scores_dict_final) == dict 
@@ -890,7 +931,7 @@ class test_scores():
         
         assert sequentiality_mode in ['CIM'], "The sequentiality mode was not supported for metric computation. It should only be for the SIM (1 iter assumed) since the base metrics are irrespective of any guidance point info"
         
-        assert human_measure.title() in ["Temporal Non Worsening"], "The human measure did not match the supported ones"
+        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening"], "The human measure did not match the supported ones"
         
         if infer_run_mode[0].title() == "Editing":
 
@@ -907,6 +948,9 @@ class test_scores():
 
             for image in image_names:
                 #Extracting the image name without the file extension:
+                
+                
+                
                 image_no_ext = image.split('.')[0] 
 
                 #We use a dict to save the scores, because we may also want per-class scores to be saved.
@@ -929,10 +973,10 @@ class test_scores():
 
                 #Adding the scores on the intermediary iterations
 
-                iter_infos = [[infer_run_mode[1], 'dummy']]
+                iter_infos = [[infer_run_mode[1].lower(), 'dummy']]
                 
                 for index,iteration_folder in enumerate(iteration_folders): 
-
+                     
                     #First we extract the guidance points and parametrisations for this iteration:
 
                     iter_infos += [['deepedit', index + 1]] 
@@ -944,12 +988,39 @@ class test_scores():
                     if index == 0:
                         #In this case the prior iter was the initialisation. 
 
-                        cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
-                    else:
-                        #In this case the prior iter was an edit iter.
-                        cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'label', iteration_folders[-1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
-                    
+                        if self.human_measure == "Temporal Non Worsening":
 
+                            cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                    
+                        elif self.human_measure == "Local Responsiveness":
+                            #In this case, we want to find the pre and post-click segmentation scores weighted by the mask for the given iteration.
+                            cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score = cross_class_score_post_click - cross_class_score_pre_click 
+                            
+                            per_class_scores_dict = dict() 
+
+                            for class_label in per_class_scores_dict_pre_click.keys():
+                                per_class_scores_dict[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
+
+                    else:
+                        
+                        if self.human_measure == "Temporal Non Worsening":
+                            #In this case the prior iter was an edit iter.
+                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'label', iteration_folders[-1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        
+
+                        elif self.human_measure == "Local Responsiveness":
+                            #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
+                            cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1])], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index])], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score = cross_class_score_post_click - cross_class_score_pre_click 
+                            
+                            per_class_scores_dict = dict() 
+
+                            for class_label in per_class_scores_dict_pre_click.keys():
+                                per_class_scores_dict[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
+                            
                     assert type(cross_class_score) == torch.Tensor
                     assert type(per_class_scores_dict) == dict 
 
@@ -974,7 +1045,22 @@ class test_scores():
                 guidance_points_final, guidance_final_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, submitted_iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
             
 
-                cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                if self.human_measure == "Temporal Non Worsening":
+    
+                    cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+            
+                elif self.human_measure == "Local Responsiveness":
+                    
+                    #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
+                    cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1])], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                    cross_class_score_post_click, per_class_scores_dict_post_click = editing_score_tool([final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+                    cross_class_score_final = cross_class_score_post_click - cross_class_score_pre_click 
+                    
+                    per_class_scores_dict_final = dict() 
+
+                    for class_label in per_class_scores_dict_pre_click.keys():
+                        per_class_scores_dict_final[class_label] = per_class_scores_dict_post_click[class_label] - per_class_scores_dict_pre_click[class_label]
+
 
                 assert type(cross_class_score_final) == torch.Tensor
                 assert type(per_class_scores_dict_final) == dict 
@@ -1061,13 +1147,15 @@ class test_scores():
         #In this case, the prediction, the ground truth, and the guidance points set, and the parametrisations for the weightmap for the metric are provided (only for a given iter). 
 
         if sequentiality_mode == "SIM":
-            
-            self.base_score_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
-        
+            if len(infer_run_mode) == 1:
+                self.base_score_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
+            if len(infer_run_mode) == 3:
+                self.sim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
         if sequentiality_mode == "CIM":
-
-            self.cim_mode_base_score_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
-
+            if len(infer_run_mode) == 1:
+                self.cim_mode_base_score_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
+            if len(infer_run_mode) == 3:
+                self.cim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
     
 
     def temporal_consist_score_computation(self,

@@ -8,7 +8,11 @@ from score_generation_path_utils import path_generation
 import shutil 
 import math 
 
-class score_summarisation():
+
+'''Pure dice score summarisation which uses the existing scores to compute summary statistics for relative improvement on a per-iteration basis.'''
+
+
+class pure_dice_relative_score_summarisation():
     def __init__(self, args):
         
         assert type(args) == dict, 'Score generation failed because the score merging config was not a dict'
@@ -46,6 +50,7 @@ class score_summarisation():
         assert type(self.include_background_metric) == bool 
         assert type(self.app_dir_path) == str 
         assert type(self.infer_run_mode) == list 
+        assert len(self.infer_run_mode) == 3, "This script is only intended for multi-iteration score computation"
         assert type(self.human_measure) == str 
         assert type(self.base_metric) == str
         assert type(self.gt_weightmap_types) == list 
@@ -62,42 +67,33 @@ class score_summarisation():
 
         supported_initialisations = ['Autoseg','Interactive']
         
-        supported_click_weightmaps =['Ellipsoid',
-                                    'Cuboid', 
-                                    'Scaled Euclidean Distance',
-                                    'Exponentialised Scaled Euclidean Distance',
-                                    '2D Intersections', 
-                                    'None']
+        supported_click_weightmaps = ['None']
         
-        supported_gt_weightmaps = ['Connected Component',
-                                    'None']
+        supported_gt_weightmaps = ['None']
             
-        supported_human_measures = ['Local Responsiveness',
-                                    'Temporal Non Worsening',
-                                    'None'] 
-        supported_base_metrics = ['Dice',
-                                'Error Rate']
+        supported_human_measures = ['None']
+
+        supported_base_metrics = ['Dice']
         
-        supported_score_summaries = ['Mean',
-                                     'Median',
-                                     'Standard Deviation',
-                                     'Interquartile Range']
+        supported_score_summaries = ['Mean Relative Improvement to Init',
+                                     'Median Relative Improvement to Init',
+                                     'Standard Deviation of Relative Improvement to Init',
+                                     'Interquartile Range of Relative Improvement to Init',
+                                     'Mean Per Iter Improvement',
+                                     'Median Per Iter Improvement',
+                                     'Standard Deviation of Per Iter Improvement',
+                                     'Interquartile Range of Per Iter Improvement',
+                                     ]
         
         '''
         Corresponding parametrisations:
 
         click weightmaps:
 
-        ellipsoid: raw parametrisations for each of the denoms in the ellipse equation, accepts 1 or N_dims length list
-        cuboid: raw parametrisations for the half-dimension lengths in the cuboids, accepts 1 or N_dims length list 
-        scaled euclidean distance: parametrisations which scale the terms in the euclidean (their denominators), accepts 1 or N_dims length list
-        exponentialised scaled euclidean distance: parameterisations which scale the terms in eucilidean (their denoms) + the exponentiation parameter, accepts length 2 or N_dims + 1 length list.
-        2d intersecions: none
         none: none 
 
         gt_weightmaps:
         
-        connected_component: none
         none: none 
 
         '''
@@ -193,36 +189,57 @@ class score_summarisation():
         for key in self.summary_dict.keys():
             parametrisation = self.summary_dict[key] 
 
-            if key.title() == 'Mean':
+            # if key.title() == 'Mean':
 
-                summarised_output[key] = self.compute_mean(just_scores, parametrisation)
+            #     summarised_output[key] = self.compute_mean(just_scores, parametrisation)
 
-            elif key.title() == "Median":
+            # elif key.title() == "Median":
 
-                summarised_output[key] = self.compute_median(just_scores, parametrisation)
+            #     summarised_output[key] = self.compute_median(just_scores, parametrisation)
 
-            elif key.title() == "Standard Deviation":
+            if key.title() == "Standard Deviation of Relative Improvement To Init":
 
-                summarised_output[key] = self.compute_standard_dev(just_scores, parametrisation)
+                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
+                summarised_output[key] = self.compute_standard_dev(relative_improv_scores, parametrisation)
 
-            elif key.title() == "Interquartile Range":
-
-                summarised_output[key] = self.compute_iqr(just_scores, parametrisation) 
-
-            elif key.title() == "Mean Relative Improvement":
-
-                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)  
-                summarised_output[key] = self.compute_mean(relative_improv_scores)
-
-            elif key.title() == "Median Relative Improvement":
+            elif key.title() == "Interquartile Range of Relative Improvement To Init":
                 
                 relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_median(relative_improv_scores)
+                summarised_output[key] = self.compute_iqr(relative_improv_scores, parametrisation) 
+
+            elif key.title() == "Mean Relative Improvement To Init":
+
+                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)  
+                summarised_output[key] = self.compute_mean(relative_improv_scores, parametrisation)
+
+            elif key.title() == "Median Relative Improvement To Init":
+                
+                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
+                summarised_output[key] = self.compute_median(relative_improv_scores, parametrisation)
+
+######################################################################################
+            elif key.title() == "Standard Deviation Of Per Iter Improvement":
+
+                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
+                summarised_output[key] = self.compute_standard_dev(relative_improv_scores, parametrisation)
+
+            elif key.title() == "Interquartile Range Of Per Iter Improvement":
+                
+                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
+                summarised_output[key] = self.compute_iqr(relative_improv_scores, parametrisation) 
+
+            elif key.title() == "Mean Per Iter Improvement":
+
+                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)  
+                summarised_output[key] = self.compute_mean(relative_improv_scores, parametrisation)
+
+            elif key.title() == "Median Per Iter Improvement":
+                
+                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
+                summarised_output[key] = self.compute_median(relative_improv_scores, parametrisation)
 
 
 
-
-        
 
         #Saving the summary statistics
         
@@ -268,7 +285,17 @@ class score_summarisation():
             assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the relative to initialisation score improvement computation" 
 
         initialisation = np.array(output_scores[0])
-        return [np.array(sublist) - initialisation for sublist in output_scores]
+        return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - initialisation for sublist in output_scores[1:]]
+
+    def compute_per_iter_improvement(self, output_scores, parametrisation):
+        #This is all relative to the prior iteration's dice score. 
+
+        num_scores = len(output_scores[0])
+        
+        for score_list in output_scores:
+            assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the per-iteration relative improvement score generation"
+
+        return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - output_scores[i] for i,sublist in enumerate(output_scores[1:])]
 
     def __call__(self):
     
@@ -351,7 +378,7 @@ class score_summarisation():
         #Summarisation config should also be saved as a json for checking:
         
 
-        with open(os.path.join(results_save_dir, 'summarisation_config.json'), 'w') as f:
+        with open(os.path.join(results_save_dir, 'relative_score_summarisation_config.json'), 'w') as f:
     
             json.dump(dict(vars(self)), f)
 
@@ -359,7 +386,7 @@ class score_summarisation():
 
         filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
 
-        self.score_summarisation(results_save_dir, f'{self.base_metric}_summarisation.csv', filtered_and_sample_averaged)
+        self.score_summarisation(results_save_dir, f'{self.base_metric}_relative_score_summarisation.csv', filtered_and_sample_averaged)
 
         if self.per_class_scores:
 
@@ -373,4 +400,4 @@ class score_summarisation():
                 
                 filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
                 
-                self.score_summarisation(results_save_dir, f'class_{class_label}_{self.base_metric}_summarisation.csv', filtered_and_sample_averaged)
+                self.score_summarisation(results_save_dir, f'class_{class_label}_{self.base_metric}_relative_score_summarisation.csv', filtered_and_sample_averaged)

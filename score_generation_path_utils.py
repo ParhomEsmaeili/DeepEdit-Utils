@@ -89,7 +89,7 @@ class path_generation():
             elif click_parametrisation_type.title() == "Fixed Click Size":
                 #In this case, there is an additional part of the subpath which denotes FIXED click size, and the parametrisation across the image dimensions.
 
-                final_inference_run_subtype = os.path.join(inference_run_subtype, conf_dict['inference_click_parametrisation'][click_parametrisation_type], conf_dict['run_infer_string'])
+                final_inference_run_subtype = os.path.join(inference_run_subtype, "Fixed Click Size" + f" {conf_dict['inference_click_parametrisation'][click_parametrisation_type]}", conf_dict['run_infer_string'])
 
             elif click_parametrisation_type.title() == "Dynamic Click Size":
                 #In this case, there is an additional part of the subpath which denotes DYNAMIC click size, the parametrisation will be saved into a dict to match the guidance points dict that is 
