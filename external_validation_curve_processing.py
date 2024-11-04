@@ -39,9 +39,9 @@ def validation_score_computation(file_path, num_epochs):
 
 def parse_arguments():
     parser = argparse.ArgumentParser("External Validation Score Processing")
-    parser.add_argument("--datetime", default="20241031_230425")
+    parser.add_argument("--datetime", default="20241103_142602")
     parser.add_argument("--model_dir", default="models")
-    parser.add_argument("--num_epochs", default='211')
+    parser.add_argument("--num_epochs", default='300')
     return parser
 
 

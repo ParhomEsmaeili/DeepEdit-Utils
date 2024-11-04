@@ -34,6 +34,7 @@ class test_scores():
         self.click_weightmaps_dict = args['click_weightmap_dict']
         self.infer_run_parametrisation = args['inference_run_parametrisation'] #This parametrisation pertains to both the click size but also to whether it is working in CIM/1-iter SIM type modes
         self.infer_run_num = args['inference_run_num']
+        self.infer_simulation_type = args['simulation_type']
         self.checkpoint = args['checkpoint']
         self.datetime = args['datetime']
         self.studies = args['studies'] 
@@ -52,6 +53,7 @@ class test_scores():
         assert type(self.click_weightmaps_dict) == dict
         assert type(self.infer_run_parametrisation) == dict
         assert type(self.infer_run_num) == str 
+        assert type(self.infer_simulation_type) == str
         assert type(self.checkpoint) == str 
         assert type(self.datetime) == str
         assert type(self.studies) == str 
@@ -79,6 +81,9 @@ class test_scores():
         supported_sequentiality_modes = ['CIM',
                                          'SIM']
         
+        supported_simulation_types = ['probabilistic',
+                                      'deterministic']
+        
         '''
         Corresponding parametrisations:
 
@@ -97,7 +102,7 @@ class test_scores():
         none: none 
 
         '''
-        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_sequentiality_modes
+        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_sequentiality_modes, supported_simulation_types
                                 
 
     def base_score_computation(self,
@@ -1226,7 +1231,7 @@ class test_scores():
         inference_config_dict['inference_run_config'] = self.infer_run_mode
         
         inference_config_dict['dataset_name'] = self.studies
-        inference_config_dict['dataset_subset'] = self.dataset_subset
+        inference_config_dict['dataset_subset'] = self.dataset_subset + f'_{self.infer_simulation_type}'
         
         inference_config_dict['datetime'] = self.datetime
         inference_config_dict['checkpoint'] = self.checkpoint
@@ -1243,7 +1248,7 @@ class test_scores():
 
         #Verifying that the selected configurations are supported by the downstream utilities.
 
-        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_sequentiality_modes = self.supported_configs()
+        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_sequentiality_modes, supported_simulation_types = self.supported_configs()
 
 
         if any([weightmap not in supported_click_weightmaps for weightmap in self.click_weightmaps_dict.keys()]):
@@ -1267,6 +1272,10 @@ class test_scores():
         
         if self.sequentiality_mode not in supported_sequentiality_modes:
             raise ValueError("The selected sequentiality mode (e.g. CIM) was not supported")
+        
+        if self.infer_simulation_type not in supported_simulation_types:
+
+            raise ValueError("The selected simulation type (e.g. probabilistic) was not supported")
         
         metric_config_dict['gt_weightmap_types'] = self.gt_weightmap_types
         metric_config_dict['human_measure'] = self.human_measure 

@@ -33,6 +33,7 @@ class score_summarisation():
         self.click_weightmaps_dict = args['click_weightmap_dict']
         self.infer_run_parametrisation = args['inference_run_parametrisation'] #This parametrisation pertains to both the click size but also to whether it is working in CIM/1-iter SIM type modes
         self.infer_run_nums = args['inference_run_nums']
+        self.infer_simulation_type = args['simulation_type']
         self.checkpoint = args['checkpoint']
         self.datetime = args['datetime']
         self.studies = args['studies'] 
@@ -56,6 +57,7 @@ class score_summarisation():
         assert type(self.click_weightmaps_dict) == dict
         assert type(self.infer_run_parametrisation) == dict
         assert type(self.infer_run_nums) == list 
+        assert type(self.infer_simulation_type) == str
         assert type(self.checkpoint) == str 
         assert type(self.datetime) == str
         assert type(self.studies) == str 
@@ -85,8 +87,14 @@ class score_summarisation():
         supported_score_summaries = ['Mean',
                                      'Median',
                                      'Standard Deviation',
-                                     'Interquartile Range']
+                                     'Interquartile Range',
+                                     'Lower Quartile',
+                                     'Upper Quartile',
+                                     'Minimum',
+                                     'Maximum']
         
+        supported_simulation_types = ['probabilistic',
+                                      'deterministic']
         '''
         Corresponding parametrisations:
 
@@ -105,7 +113,7 @@ class score_summarisation():
         none: none 
 
         '''
-        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries
+        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries, supported_simulation_types
           
 
     def score_extraction(self, results_save_dir, metric):
@@ -213,6 +221,22 @@ class score_summarisation():
 
                 summarised_output[key] = self.compute_iqr(just_scores, parametrisation) 
 
+            elif key.title() == "Lower Quartile":
+
+                summarised_output[key] = self.compute_lower_quartile(just_scores, parametrisation)
+            
+            elif key.title() == "Upper Quartile":
+
+                summarised_output[key] = self.compute_upper_quartile(just_scores, parametrisation)
+
+            elif key.title() == "Minimum":
+
+                summarised_output[key] = self.compute_minimum(just_scores, parametrisation)
+
+            elif key.title() == "Maximum":
+                
+                summarised_output[key] = self.compute_maximum(just_scores, parametrisation)
+
             # elif key.title() == "Mean Relative Improvement":
 
             #     relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)  
@@ -263,6 +287,23 @@ class score_summarisation():
 
         return [np.percentile(sublist, 75) - np.percentile(sublist, 25) for sublist in output_scores]
     
+    def compute_upper_quartile(self, output_scores, parametrisation):
+
+        return [np.percentile(sublist, 75) for sublist in output_scores]
+    
+    def compute_lower_quartile(self, output_scores, parametrisation):
+
+        return [np.percentile(sublist, 25) for sublist in output_scores]
+    
+    def compute_minimum(self, output_scores, parametrisation):
+
+        return [np.min(sublist) for sublist in output_scores]
+    
+    def compute_maximum(self, output_scores, parametrisation):
+
+        return [np.max(sublist) for sublist in output_scores]
+    
+    
     def compute_relative_improvement(self, output_scores, parametrisation):
         #This is relative to the initialisation score!
         #This requires the number of samples to be consistent throughout! 
@@ -282,7 +323,7 @@ class score_summarisation():
         inference_config_dict['inference_run_config'] = self.infer_run_mode
         
         inference_config_dict['dataset_name'] = self.studies
-        inference_config_dict['dataset_subset'] = self.dataset_subset
+        inference_config_dict['dataset_subset'] = self.dataset_subset + f'_{self.infer_simulation_type}'
         
         inference_config_dict['datetime'] = self.datetime
         inference_config_dict['checkpoint'] = self.checkpoint
@@ -302,7 +343,7 @@ class score_summarisation():
 
         #Verifying that the selected configurations are supported by the downstream utilities.
 
-        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries = self.supported_configs()
+        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries, supported_simulation_types = self.supported_configs()
 
 
         if any([weightmap not in supported_click_weightmaps for weightmap in self.click_weightmaps_dict.keys()]):
@@ -327,6 +368,9 @@ class score_summarisation():
         if any([summary not in supported_score_summaries for summary in self.summary_dict.keys()]): 
             raise ValueError("The selected score summaries are not yet supported")
         
+        if self.infer_simulation_type not in supported_simulation_types:
+
+            raise ValueError("The selected simulation type (e.g. probabilistic) was not supported")
 
         metric_config_dict['gt_weightmap_types'] = self.gt_weightmap_types
         metric_config_dict['human_measure'] = self.human_measure 

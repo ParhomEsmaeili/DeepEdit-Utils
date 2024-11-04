@@ -29,6 +29,7 @@ class score_merging_class():
         self.checkpoint = args['checkpoint']
         self.datetime = args['datetime']
         self.studies = args['studies'] 
+        self.infer_simulation_type = args['simulation_type']
 
         assert type(self.dataset_subset) == str 
         # assert type(self.sequentiality_mode) == str 
@@ -44,6 +45,7 @@ class score_merging_class():
         assert type(self.click_weightmaps_dict) == dict
         assert type(self.infer_run_parametrisation) == dict
         assert type(self.infer_run_nums) == list 
+        assert type(self.infer_simulation_type) == str
         assert type(self.checkpoint) == str 
         assert type(self.datetime) == str
         assert type(self.studies) == str 
@@ -70,6 +72,8 @@ class score_merging_class():
         supported_base_metrics = ['Dice',
                                 'Error Rate']
         
+        supported_simulation_types = ['probabilistic',
+                                      'deterministic']
         '''
         Corresponding parametrisations:
 
@@ -88,7 +92,7 @@ class score_merging_class():
         none: none 
 
         '''
-        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics
+        return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_simulation_types
           
 
     def score_collection(self, results_save_dir, infer_run_nums, score_files_base_dir, metric, rejection_value=0):
@@ -152,7 +156,7 @@ class score_merging_class():
         inference_config_dict['inference_run_config'] = self.infer_run_mode
         
         inference_config_dict['dataset_name'] = self.studies
-        inference_config_dict['dataset_subset'] = self.dataset_subset
+        inference_config_dict['dataset_subset'] = self.dataset_subset + f'_{self.infer_simulation_type}'
         
         inference_config_dict['datetime'] = self.datetime
         inference_config_dict['checkpoint'] = self.checkpoint
@@ -172,7 +176,7 @@ class score_merging_class():
 
         #Verifying that the selected configurations are supported by the downstream utilities.
 
-        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics = self.supported_configs()
+        supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_simulation_types = self.supported_configs()
 
 
         if any([weightmap not in supported_click_weightmaps for weightmap in self.click_weightmaps_dict.keys()]):
@@ -196,6 +200,10 @@ class score_merging_class():
         
         # if self.sequentiality_mode not in supported_sequentiality_modes:
         #     raise ValueError("The selected sequentiality mode (e.g. CIM) was not supported")
+
+        if self.infer_simulation_type not in supported_simulation_types:
+
+            raise ValueError("The selected simulation type (e.g. probabilistic) was not supported")
         
         metric_config_dict['gt_weightmap_types'] = self.gt_weightmap_types
         metric_config_dict['human_measure'] = self.human_measure 

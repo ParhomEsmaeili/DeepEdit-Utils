@@ -85,7 +85,7 @@ class MaskGenerator:
         click_availability_bool = list(chain.from_iterable(list(guidance_points_set.values()))) != [] #Checking that the overall click set isn't empty
         per_class_click_availability_bool = dict()    #Checking whether each click class is empty or not.
 
-        print(guidance_points_set) 
+        # print(guidance_points_set) 
         #We will obtain cross-class and per-class masks so that we generate cross-class fused, and per-class fused masks.
 
         cross_class_masks = []
@@ -455,6 +455,8 @@ class MaskGenerator:
         In instances where a weightmap subtype is not being used (e.g. click or gt type), the "None" will be the only corresponding selection in that list for the mask generator definition.
 
         Therefore, in these instances it will just generate tensors of ones.
+
+        Per Class masks are generated using the clicks/gt information ONLY for that class. Cross class masks are generated across all classes (including background if specified)
         
         '''
         
@@ -462,8 +464,10 @@ class MaskGenerator:
         It also accepts information about the human_measure, for example with temporal non-worsening it would be the map of changed voxels. It also takes information about whether the
         background is included.
         
-        #This takes the dictionary which contains the guidance points for all classes. This set of guidance points will be assumed to be in the same orientation of the images.'''
 
+        #This takes the dictionary which contains the guidance points for all classes. This set of guidance points will be assumed to be in the same orientation of the images.'''
+        
+        
         assert type(guidance_points_set) == dict
         
         '''Ensure that the value for each class key (class name) in the dict is a nested list of the points which are represented as a list of coordinates'''
