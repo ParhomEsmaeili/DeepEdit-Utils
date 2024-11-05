@@ -1,8 +1,12 @@
 import argparse 
 import os 
+from os.path import dirname as up 
 import shutil 
 import csv 
-from score_generation_path_utils import path_generation 
+import sys 
+utils_codebase__dir = up(up(os.path.abspath(__file__)))
+sys.path.append(utils_codebase__dir)
+from Metric_Computation_Utils.score_generation_path_utils import path_generation 
 import json 
 
 class score_merging_class():

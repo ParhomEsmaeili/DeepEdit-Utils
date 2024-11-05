@@ -1,4 +1,8 @@
-from pure_dice_per_iter_relative_score_summarisation import pure_dice_relative_score_summarisation 
+import sys 
+import os 
+from os.path import dirname as up
+utils_dir = os.path.join(up(__file__)) 
+from Score_Generation_And_Processing.pure_dice_per_iter_relative_score_summarisation import pure_dice_relative_score_summarisation 
 
 '''
 Only intended for a deepeditlike type measure, and ONLY for the actual editing mode.

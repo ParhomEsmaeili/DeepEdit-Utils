@@ -25,11 +25,12 @@ from monai.transforms import (
 # import torch
 
 
-file_dir = up(os.getcwd())
-sys.path.append(file_dir)
+utils_codebase__dir = up(up(os.path.abspath(__file__)))
+sys.path.append(utils_codebase__dir)
+# mask_generator_dir = os.path.join(os.path.abspath(__file__), 'Mask_Generation_Utils')
 
 from scoring_base_utils import ScoreUtils 
-from metric_mask_generator_utils import MaskGenerator 
+from Mask_Generation_Utils.metric_mask_generator_utils import MaskGenerator 
 
 class score_tool():
     def __init__(self, 

@@ -3,14 +3,17 @@ import os
 from os.path import dirname as up
 import csv 
 import json 
-import sys
+import sys 
 import shutil 
 import copy
 import torch 
 import re 
-from base_human_centric_metric_computation import score_tool
-from score_generation_path_utils import path_generation
-import guidance_points_utils as guide_utils 
+utils_codebase__dir = up(up(os.path.abspath(__file__)))
+sys.path.append(utils_codebase__dir)
+
+from Metric_Computation_Utils.base_human_centric_metric_computation import score_tool
+from Metric_Computation_Utils.score_generation_path_utils import path_generation
+import Metric_Computation_Utils.guidance_points_utils as guide_utils 
 from itertools import chain
 
 class test_scores():
