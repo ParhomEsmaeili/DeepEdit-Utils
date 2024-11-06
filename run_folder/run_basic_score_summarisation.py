@@ -1,11 +1,13 @@
 import os 
 import sys
 from os.path import dirname as up
-
-
+utils_dir = up(up(os.path.abspath(__file__)))
+sys.path.append(utils_dir)
 from Score_Generation_And_Processing.basic_score_summarisation import score_summarisation 
 
 '''
+For general purpose score summarisation of a per-sample averaged set of scores/or just a single set of scores.
+
 For use with a tool such as nnU-Net, just use it in a similar capacity as you would for a deepeditlike autoseg only inference run! 
 '''
 
@@ -13,7 +15,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "20241102_121843"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
+    args['datetime'] = "10072024_182402"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
 
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
@@ -70,9 +72,9 @@ if __name__ == '__main__':
 
     args['include_nan'] = False #The argument which determines whether nans should be used in summarisation/dropped out (obviously not)
 
-    args['num_samples'] = 200 #The argument which controls the number of samples that are being used for score summarisation (e.g just the first N samples)
+    # args['num_samples'] = 200 #The argument which controls the number of samples that are being used for score summarisation (e.g just the first N samples)
 
-    args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
+    # args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
 
     args['summary_dict'] = {
         'Mean': None, 

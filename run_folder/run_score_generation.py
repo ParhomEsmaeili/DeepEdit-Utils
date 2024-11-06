@@ -3,17 +3,17 @@ import sys
 from os.path import dirname as up
 
 
-utils_codebase__dir = up(up(os.path.abspath(__file__)))
-sys.path.append(utils_codebase__dir)
+utils_dir = up(up(os.path.abspath(__file__)))
+sys.path.append(utils_dir)
 from Score_Generation_And_Processing.deepeditlike_score_generation import test_scores 
 
 if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "20241103_142602"  #The name of the model datetime which is under consideration
+    args['datetime'] = "10072024_182402"  #The name of the model datetime which is under consideration
     args['checkpoint'] = "best_val_score_epoch" #"best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
-    args["inference_run_num"] = '2'  #The number of the inference run which is under consideration (for probabilistic simulation of clicks at inference)
+    args["inference_run_num"] = '1'  #The number of the inference run which is under consideration (for probabilistic simulation of clicks at inference)
     args['inference_run_parametrisation'] = {
         "None":["None"]
     }
@@ -41,12 +41,14 @@ if __name__ == '__main__':
     args['gt_weightmap_types'] = ["None"]
     #The list of the click-based weightmap types (non-parametric), e.g. connected component, or none.
 
-    args['base_metric'] = 'Dice'
+    # args['base_metric'] = 'Dice'
+    args['base_metric'] = 'Error Rate'
+    
     # The base metric being used for computation of the metric scores
 
     # args['human_measure'] = 'None' 
-    args['human_measure'] = 'Local Responsiveness'
-    # args['human_measure'] = 'Temporal Non Worsening'
+    # args['human_measure'] = 'Local Responsiveness'
+    args['human_measure'] = 'Temporal Non Worsening'
 
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
@@ -56,7 +58,7 @@ if __name__ == '__main__':
 
     args['include_background_mask'] = True #The bool which determines whether we use the background points for generating the weighting mask
 
-    args['include_background_metric'] = False #The bool which determines whether we use the background class for generating and outputting, multi-class and per class scores. 
+    args['include_background_metric'] = True #The bool which determines whether we use the background class for generating and outputting, multi-class and per class scores. 
     
     args['ignore_empty'] = True #The bool which determines whether we ignore the scores for instances where there is no denominator (because there was no ground truth) 
 

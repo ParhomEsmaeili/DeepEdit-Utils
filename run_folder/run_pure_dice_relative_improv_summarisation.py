@@ -1,7 +1,8 @@
 import sys 
 import os 
 from os.path import dirname as up
-utils_dir = os.path.join(up(__file__)) 
+utils_dir = os.path.join(up(up(__file__))) 
+sys.path.append(utils_dir)
 from Score_Generation_And_Processing.pure_dice_per_iter_relative_score_summarisation import pure_dice_relative_score_summarisation 
 
 '''
@@ -61,9 +62,9 @@ if __name__ == '__main__':
 
     args['include_nan'] = False #The argument which determines whether nans should be used in summarisation/dropped out (obviously not)
 
-    args['num_samples'] = 200 #The argument which controls the number of samples that are being used for score summarisation (e.g just the first N samples)
+    # args['num_samples'] = 200 #The argument which controls the number of samples that are being used for score summarisation (e.g just the first N samples)
 
-    args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
+    # args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
 
     args['summary_dict'] = {
         'Mean Relative Improvement to Init': None, 

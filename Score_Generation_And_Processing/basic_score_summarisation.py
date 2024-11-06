@@ -4,7 +4,11 @@ from pathlib import Path
 import torch 
 import numpy as np
 import csv 
-from score_generation_path_utils import path_generation 
+from os.path import dirname as up
+import sys 
+
+utils_dir = up(up(os.path.abspath(__file__)))
+from Metric_Computation_Utils.score_generation_path_utils import path_generation 
 import shutil 
 import math 
 
@@ -38,8 +42,6 @@ class score_summarisation():
         self.datetime = args['datetime']
         self.studies = args['studies'] 
         self.include_nan = args['include_nan']
-        self.num_samples = args['num_samples']
-        self.total_samples = args['total_samples']
         self.summary_dict = args['summary_dict']
 
 
@@ -122,13 +124,13 @@ class score_summarisation():
         assert os.path.exists(results_save_dir) 
 
         #obtaining the paths for all of the score files we want to merge together:
-        score_path = os.path.join(results_save_dir, f'{metric}_score_results.csv')
+        score_path = os.path.join(results_save_dir, f'{metric}_per_sample_averaged_results.csv')
 
         assert os.path.exists(score_path) 
 
-        num_experiment_repeats = len(self.infer_run_nums) 
+        # num_experiment_repeats = len(self.infer_run_nums) 
 
-        valid_sample_indices = [j for sublist in [list(range(self.total_samples * i,  self.total_samples * i + self.num_samples)) for i in range(num_experiment_repeats)] for j in sublist]
+        # valid_sample_indices = [j for sublist in [list(range(self.total_samples * i,  self.total_samples * i + self.num_samples)) for i in range(num_experiment_repeats)] for j in sublist]
 
 
         #extracting the scores
@@ -150,53 +152,42 @@ class score_summarisation():
                         scores[index].append(float(string))
                     elif index == 0:
                         scores[index].append(string)
-            
-            #Read all of the results, then just keep the valid indices. 
-
-        output_scores = [scores[0]]
         
-         
-        for sublist in scores[1:]:
-            
-            valid_sublist = [val for i, val in enumerate(sublist) if i in valid_sample_indices]  #and not math.isnan(val)]
-            output_scores.append(valid_sublist)
+        return scores
 
-        #Formatting of output scores is a nested list, the first sublist is a list of names of the image samples. Then each successive sublist is the corresponding list of scores
-        #for each iteration in the segmentation output. 
-
-        return output_scores 
-
-    def per_sample_averaging(self, scores):
+    # def per_sample_averaging(self, scores):
         
-        num_experiments = len(self.infer_run_nums)
+    #     num_experiments = len(self.infer_run_nums)
 
-        #we assume the image names are still there in the first index! 
-        output = [scores[0]] 
+    #     #we assume the image names are still there in the first index! 
+    #     output = [scores[0]] 
 
-        #We filter the nan scores when computing averages, if for each sample there is not a non-nan score then just continue..
+    #     #We filter the nan scores when computing averages, if for each sample there is not a non-nan score then just continue..
 
-        for sublist in scores[1:]:
+    #     for sublist in scores[1:]:
             
-            current_iter_averaged = [] 
+    #         current_iter_averaged = [] 
 
-            for index in range(self.num_samples):
-                experiment_values = [sublist[j * self.num_samples + index] for j in range(num_experiments)]
+    #         for index in range(self.num_samples):
+    #             experiment_values = [sublist[j * self.num_samples + index] for j in range(num_experiments)]
                 
-                if not self.include_nan:
-                    non_nan_vals = [val for val in experiment_values if not math.isnan(float(val))]
-                    if len(non_nan_vals)  == 0:
-                        #in this case just skip to the next sample 
-                        continue 
-                    else:
-                        #in this case, we used the filtered out nan values and average.
-                        per_sample_mean = np.mean(non_nan_vals)
-                        current_iter_averaged.append(per_sample_mean)
+    #             if not self.include_nan:
+    #                 non_nan_vals = [val for val in experiment_values if not math.isnan(float(val))]
+    #                 if len(non_nan_vals)  == 0:
+    #                     #in this case just skip to the next sample 
+    #                     continue 
+    #                 else:
+    #                     #in this case, we used the filtered out nan values and average.
+    #                     per_sample_mean = np.mean(non_nan_vals)
+    #                     current_iter_averaged.append(per_sample_mean)
 
-            #We then append the per sample averaged scores for that iteration.    
-            output.append(current_iter_averaged)
+    #         #We then append the per sample averaged scores for that iteration.    
+    #         output.append(current_iter_averaged)
 
-        return output 
-    def score_summarisation(self, results_dir, filename, scores):
+    #     return output 
+    
+    def score_summarisation(self, results_summarisation_dir, filename, scores):
+
         
         just_scores = scores[1:] #Nested list of per iteration scores.
         
@@ -254,7 +245,7 @@ class score_summarisation():
 
         #Saving the summary statistics
         
-        with open(os.path.join(results_dir, filename), 'a') as f:
+        with open(os.path.join(results_summarisation_dir, filename), 'a') as f:
             writer = csv.writer(f)
             writer.writerow([])
 
@@ -264,7 +255,7 @@ class score_summarisation():
             for score in summarised_output[summary_statistic_key]:
                 summary_stat_row.append(score) 
 
-            with open(os.path.join(results_dir, filename),'a') as f:
+            with open(os.path.join(results_summarisation_dir, filename),'a') as f:
                 
                 writer = csv.writer(f)
                 writer.writerow([])
@@ -272,36 +263,38 @@ class score_summarisation():
 
     
     
-    def compute_mean(self,output_scores, parametrisation):    
-        return [np.mean(sublist) for sublist in output_scores]
+    def compute_mean(self,output_scores, parametrisation): 
+        #Any potential nans need to be filtered (which may arise for instances where no clicks are provided for a given class multiple times for a given sample for click based metric, very unlucky.) 
+          
+        return [np.mean([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
     
     def compute_median(self, output_scores, parametrisation):
 
-        return [np.median(sublist) for sublist in output_scores]
+        return [np.median([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
 
     def compute_standard_dev(self, output_scores, parametrisation): 
 
-        return [np.std(sublist, dtype=np.float64) for sublist in output_scores]
+        return [np.std([val for val in sublist if not math.isnan(val)], dtype=np.float64) for sublist in output_scores]
     
     def compute_iqr(self, output_scores, parametrisation):
 
-        return [np.percentile(sublist, 75) - np.percentile(sublist, 25) for sublist in output_scores]
+        return [np.percentile([val for val in sublist if not math.isnan(val)], 75) - np.percentile(sublist, 25) for sublist in output_scores]
     
     def compute_upper_quartile(self, output_scores, parametrisation):
 
-        return [np.percentile(sublist, 75) for sublist in output_scores]
+        return [np.percentile([val for val in sublist if not math.isnan(val)], 75) for sublist in output_scores]
     
     def compute_lower_quartile(self, output_scores, parametrisation):
 
-        return [np.percentile(sublist, 25) for sublist in output_scores]
+        return [np.percentile([val for val in sublist if not math.isnan(val)], 25) for sublist in output_scores]
     
     def compute_minimum(self, output_scores, parametrisation):
 
-        return [np.min(sublist) for sublist in output_scores]
+        return [np.min([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
     
     def compute_maximum(self, output_scores, parametrisation):
 
-        return [np.max(sublist) for sublist in output_scores]
+        return [np.max([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
     
     
     def compute_relative_improvement(self, output_scores, parametrisation):
@@ -382,6 +375,7 @@ class score_summarisation():
 
         path_generation_class = path_generation(inference_config_dict, metric_config_dict)
 
+        #Extracts the upper level location where the raw results, summary results etc folders will be placed.
         _, results_save_dir = path_generation_class()
         
         #We extract the dictionary of class-label - class-code correspondences. This should be located in the upper folder for the dataset at hand.
@@ -398,16 +392,18 @@ class score_summarisation():
 
         #Summarisation config should also be saved as a json for checking:
         
+        results_summarisation_dir = os.path.join(results_save_dir, 'results_summarisation')
+        
+        os.makedirs(results_summarisation_dir, exist_ok=True)
 
-        with open(os.path.join(results_save_dir, 'summarisation_config.json'), 'w') as f:
-    
+        with open(os.path.join(results_summarisation_dir, 'summarisation_config.json'), 'w') as f:
             json.dump(dict(vars(self)), f)
 
-        extracted_scores = self.score_extraction(results_save_dir, self.base_metric)
+        extracted_scores = self.score_extraction(os.path.join(results_save_dir, 'per_sample_averaged_results'), self.base_metric)
 
-        filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
+        # filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
 
-        self.score_summarisation(results_save_dir, f'{self.base_metric}_summarisation.csv', filtered_and_sample_averaged)
+        self.score_summarisation(results_summarisation_dir, f'{self.base_metric}_summarisation.csv', extracted_scores)
 
         if self.per_class_scores:
 
@@ -417,8 +413,8 @@ class score_summarisation():
                     if class_label.title() == "Background":
                         continue 
                 
-                extracted_scores = self.score_extraction(results_save_dir, f'class_{class_label}_{self.base_metric}')
+                extracted_scores = self.score_extraction(os.path.join(results_save_dir, 'per_sample_averaged_results'), f'class_{class_label}_{self.base_metric}')
                 
-                filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
+                # filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
                 
-                self.score_summarisation(results_save_dir, f'class_{class_label}_{self.base_metric}_summarisation.csv', filtered_and_sample_averaged)
+                self.score_summarisation(results_summarisation_dir, f'class_{class_label}_{self.base_metric}_summarisation.csv', extracted_scores)

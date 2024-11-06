@@ -297,11 +297,11 @@ class test_scores():
                                 writer = csv.writer(f)
                                 writer.writerow(scores[class_label])
 
-                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
                 else:
-                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
@@ -365,16 +365,16 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            with open(os.path.join(results_save_dir, 'raw_results', f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
                                 writer = csv.writer(f)
                                 writer.writerow(scores[class_label])
 
-                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
                 else:
-                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
@@ -875,9 +875,9 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(scores[class_label])
+                        with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(scores[class_label])
 
                     with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
@@ -1092,9 +1092,9 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(scores[class_label])
+                        with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(scores[class_label])
                     
                     with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
@@ -1209,7 +1209,7 @@ class test_scores():
         
         assert sequentiality_mode in ['CIM', 'SIM'], "The sequentiality mode was not supported for metric computation."
 
-        assert human_measure.title() == "Local Responsiveness", "Human measure did not match the computation function"
+        assert human_measure.title() == "Temporal Non Worsening", "Human measure did not match the computation function"
 
         #In this case, the prediction, the ground truth, and the guidance points set, and the parametrisations for the weightmap for the metric are provided (only for a given iter). 
 
@@ -1325,25 +1325,33 @@ class test_scores():
         click_weightmap_types = list(self.click_weightmaps_dict.keys())
         gt_weightmap_types = self.gt_weightmap_types
 
-        #IF there is an autoseg mode, OR, if we are computing for an autoseg init. then we need to allow for side-stepping of the fact that there is no guidance points/parametrisations applicable
+        if self.base_metric == 'Dice':
+            #IF there is an autoseg mode, OR, if we are computing for an autoseg init. then we need to allow for side-stepping of the fact that there is no guidance points/parametrisations applicable
 
-        if self.infer_run_mode[0].title() == "Autoseg":
-            metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+            if self.infer_run_mode[0].title() == "Autoseg":
+                metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+            
+            if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Autoseg":
+                metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
+                                        "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+                                        }   
+            
+            if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Interactive":
+                metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
+                                        "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+                                        } 
+            if self.infer_run_mode[0].title() == "Interactive":
+
+                metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+
+        elif self.base_metric == 'Error Rate':
+            #Currently this is only supported/intended for cross-iteration temporal non-worsening, therefore support is only provided for that infer mode.
+            assert len(self.infer_run_mode) >  1
+
         
-        if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Autoseg":
-            metric_computer_tools = {"Autoseg":score_tool(config_labels, "None", ["None"], ["None"], self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
-                                     "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
-                                    }   
-        
-        if len(self.infer_run_mode) > 1 and self.infer_run_mode[1].title() == "Interactive":
-            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores),
-                                     "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+            metric_computer_tools = {
+                                    "Editing":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
                                     } 
-        if self.infer_run_mode[0].title() == "Interactive":
-
-            metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
-
-    
 
         #####################################################################################################################################################
 

@@ -407,9 +407,9 @@ class MaskGenerator:
         elif self.human_measure[0].title() == "Temporal Non Worsening":
             #If temporal non-worsening is the measure, then we need to invert a locality based mask.
             
-            #For temporal non-worsening, we also have the set of changed voxels as a bool mask.
+            #For temporal non-worsening, we also have the set of changed voxels for that class (and include background) as a bool mask.
             
-            cross_class_information = human_measure_information['changed_voxels']
+            cross_class_information = human_measure_information['cross_class_changed_voxels']
             cross_class_click_weightmap = click_based_weightmaps[0]
             cross_class_gt_weightmap = gt_based_weightmaps[0] 
 
@@ -418,18 +418,22 @@ class MaskGenerator:
 
             per_class_final_weightmaps = dict() 
             
-            for class_label in click_based_weightmaps[1].keys():
+            #We use the class labels in the human measure information dict, because we may want information about background clicks BUT there may be an instance where
+            #we do not want any information about the background class for the metric computation -- the human measure information is used to pass forward this information
+            #implicitly. 
+
+            for class_label in human_measure_information['per_class_changed_voxels'].keys():
                 
                 per_class_click_weightmap = click_based_weightmaps[1][class_label]
                 per_class_gt_weightmap = gt_based_weightmaps[1][class_label]
-                per_class_information = human_measure_information[1][class_label]
+                per_class_information = human_measure_information['per_class_changed_voxels'][class_label]
 
                 final_weightmap = (1 - per_class_click_weightmap * per_class_gt_weightmap) * per_class_information
 
                 per_class_final_weightmaps[class_label] = final_weightmap  
 
         elif self.human_measure[0].title() == "None":
-
+            #This is just for default scores! No weightmap
             final_cross_class_weightmap = torch.ones(image_dims) 
             
             per_class_final_weightmaps = dict() 

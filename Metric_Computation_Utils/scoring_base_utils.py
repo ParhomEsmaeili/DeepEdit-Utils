@@ -179,56 +179,53 @@ class ErrorRateUtils:
         assert type(image_masks[1]) == dict, 'Error rate generation failed because the per-class mask parameter was not a class-separated dict.'
 
     
-        class_separated_pred = dict() 
+        # class_separated_pred = dict() 
 
-        class_separated_gt = dict()
+        # class_separated_gt = dict()
+
+        #Unlike the dice score computation, the include background metric parameter is not used for the cross class score. Any information pertaining to that 
+        # should be encoded into the image mask[0]. I.e. the image mask contains the weighting for all of the voxels under consideration. 
         
-        weighted_errors = 0
-        weighted_denom = 0
+        _, _, error_rate_cross_class = self.extract_error_rate_info(ignore_empty, pred, gt, image_masks[0])
+        
+    
         per_class_scores = dict()
 
-        for class_label, class_code in dict_class_codes.items():
+        if include_per_class_scores:
+            for class_label, class_code in dict_class_codes.items():
 
-            if not include_background:
-                if class_label.title() == "Background":
-                    continue 
+                if not include_background:
+                    if class_label.title() == "Background":
+                        continue 
 
-            class_separated_pred = torch.where(pred == class_code, 1, 0)
-            class_separated_gt = torch.where(gt == class_code, 1, 0)
-
-
-            (per_class_weighted_errors, per_class_weighted_denom, per_class_error_rate) = self.error_rate_per_class(ignore_empty, class_separated_pred, class_separated_gt, image_masks[1][class_label])
-
-            weighted_errors += per_class_weighted_errors
-            weighted_denom += per_class_weighted_denom
+                class_separated_pred = torch.where(pred == class_code, 1, 0)
+                class_separated_gt = torch.where(gt == class_code, 1, 0)
             
-            if include_per_class_scores:
+                (per_class_weighted_errors, per_class_weighted_denom, per_class_error_rate) = self.extract_error_rate_info(ignore_empty, class_separated_pred, class_separated_gt, image_masks[1][class_label])
 
+                
                 per_class_scores[class_label] = per_class_error_rate
 
-
-        error_rate_cross_class = self.error_rate_comp(weighted_errors, weighted_denom)
 
         
         return (error_rate_cross_class, per_class_scores)
         
-    def error_rate_per_class(self, ignore_empty, class_separated_pred, class_separated_gt, image_mask):
-        #For a weighted error rate, given that class segments may have different sizes, we may want to examine class-by-class. 
-
-        #For the denominator, we elect to use the voxels that belong to the ground truth of that class, so that the error rates are balanced according to the size of their own segments.
-
-        disjoint = torch.ones_like(class_separated_pred) - class_separated_pred * class_separated_gt 
+    def extract_error_rate_info(self, ignore_empty, pred, gt, image_mask):
+        
+        disjoint = torch.ones_like(pred) - torch.where(pred == gt, 1, 0) 
 
         #applying the image mask weightings to these error voxels
 
         weighted_errors = torch.sum(disjoint * image_mask)
 
-        #computing the denominator (the weighting of the gt voxels) from the gt mask. 
+        #computing the denominator (the weighting of the gt voxels) from the gt mask, the image mask should implicitly capture the set of voxels being
+        # examined, so we can just sum over the gt.... 
 
-        weighted_denom = torch.sum(class_separated_gt * image_mask) 
+        weighted_denom = torch.sum(image_mask) 
 
 
         error_rate = self.error_rate_comp(ignore_empty, weighted_errors, weighted_denom)
+
 
         return (weighted_errors, weighted_denom, error_rate)
     
@@ -236,7 +233,10 @@ class ErrorRateUtils:
 
         if weighted_denom > 0:
             #In this case, there were some voxels for this class which had been modified.
-            return torch.tensor([weighted_errors/weighted_denom])
+            error_rate = torch.tensor([weighted_errors/weighted_denom])
+            assert float(error_rate) <= 1.0
+
+            return error_rate 
 
         if ignore_empty:
             return torch.tensor([float("nan")])

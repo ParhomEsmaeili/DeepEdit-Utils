@@ -29,7 +29,7 @@ utils_codebase__dir = up(up(os.path.abspath(__file__)))
 sys.path.append(utils_codebase__dir)
 # mask_generator_dir = os.path.join(os.path.abspath(__file__), 'Mask_Generation_Utils')
 
-from scoring_base_utils import ScoreUtils 
+from Metric_Computation_Utils.scoring_base_utils import ScoreUtils 
 from Mask_Generation_Utils.metric_mask_generator_utils import MaskGenerator 
 
 class score_tool():
@@ -85,9 +85,12 @@ class score_tool():
         self.supported_gt_weightmaps = ['Connected Component',
                                         'None']
             
-        self.supported_human_measures = ['Local Responsiveness',
-                                        'Temporal Non Worsening',
-                                        'None']
+        self.supported_human_measures_dice = ['Local Responsiveness',
+                                        # 'Temporal Non Worsening',
+                                        'None'] #In this context, None = Default global dice score.
+        
+        self.supported_human_measures_error_rate = ['Temporal Non Worsening',
+                                                    ]
 
         if any([weightmap not in self.supported_click_weightmaps + self.supported_gt_weightmaps for weightmap in self.click_weightmap_types]):
             raise ValueError("The selected click weightmap type is not supported by the mask generator utilities")
@@ -95,8 +98,15 @@ class score_tool():
         if any([weightmap not in self.supported_click_weightmaps + self.supported_gt_weightmaps for weightmap in self.gt_weightmap_types]):
             raise ValueError("The selected gt weightmap type is not supported by the mask generator utilities") 
         
-        if self.human_measure not in self.supported_human_measures:
-            raise ValueError("The selected human measure is not supported by the mask generator utilities")
+        if self.metric_base == 'Dice':
+
+            if self.human_measure not in self.supported_human_measures_dice:
+                raise ValueError("The selected human measure is not intended or supported by the mask generator utility")
+        
+        elif self.metric_base == 'Error Rate':
+
+            if self.human_measure not in self.supported_human_measures_error_rate:
+                raise ValueError("The selected human measure is not intended or supported by the mask generator utility")
 
         # #Extract the corresponding weightmaps for the corresponding subtypes.
 
@@ -169,6 +179,15 @@ class score_tool():
             #We extract the first channel since it is a batchwise function.
 
         elif self.human_measure == "Temporal Non Worsening":
+            
+            #We place an initial assertion that the following configurations are permitted for the error rate generation:
+
+            if self.include_background_metric == True:
+                
+                assert self.include_background_mask == True  #We must do this because otherwise there would not be a background click/gt weightmap to correspond to 
+            else:
+                pass #Else, nothing needs to be checked, either configuration will be acceptable for the background mask param. If it was true, then it would just be ignored anyways.
+            
 
             input_dict = {"pred_1":pred_image_paths[0], "pred_2":pred_image_paths[1], "gt":gt_image_path}
             output_dict = self.transforms_composition(input_dict)
@@ -178,11 +197,71 @@ class score_tool():
             pred_2 = torch.tensor(output_dict['pred_2'][0])
             gt = torch.tensor(output_dict['gt'][0])
 
-            changed_voxels = torch.where(pred_1 != pred_2, 1, 0)
-
-            human_measure_information = {'changed_voxels':changed_voxels}
-
             final_pred = pred_2
+            
+            try:
+                background_class_code = self.dict_class_codes['background']
+            except:
+                background_class_code = self.dict_class_codes['Background']
+            
+
+            #Human measure information for this  will contain a set of bool masks which pass forward information with respect to whether the background is included for 
+            # metric computation.
+            human_measure_information = dict()
+
+            #We use the metric background bool because the human measure information is a weighting which is intended to be pre-applied to the metric computation
+            #in order to drop out the non-changed voxels. Correspondingly, if background is not being desired in the metric, the weightmap should reflect this. 
+            if self.include_background_metric:
+
+                cross_class_changed_voxels = torch.where(pred_1 != pred_2, 1, 0)
+                human_measure_information['cross_class_changed_voxels'] = cross_class_changed_voxels
+            
+            else:
+                
+                #Extracting the non background voxels from the ground truth to mask the changed voxels which belong to non-background since these shouldn't be used in the metric
+                #I.e. we are only interested in the changed voxels which are non background gt. Very unlikely..
+                cross_class_changed_voxels = torch.where(pred_1 != pred_2, 1, 0)
+
+                human_measure_information['cross_class_changed_voxels'] = cross_class_changed_voxels * torch.where(gt != background_class_code, 1, 0)
+
+
+            if self.include_per_class_scores:
+                
+                per_class_changed_voxels = dict()
+
+                for class_label, class_code in self.dict_class_codes.items():
+                    
+                    if class_label.title() == 'Background':
+                        if not self.include_background_metric:
+                            continue
+                        else:
+                            pred_1_per_class = torch.where(pred_1 == int(class_code), 1, 0)
+
+                            pred_2_per_class = torch.where(pred_2 == int(class_code), 1, 0)
+
+                            gt_per_class = torch.where(gt == int(class_code), 1, 0)
+                            # if self.include_background_metric:
+
+                            #For each class, we just want to extract the corresponding changed voxels for that given class only.
+
+                            per_class_changed_voxels[class_label] = torch.where(pred_1_per_class != pred_2_per_class, 1, 0) * gt_per_class 
+
+                    else:
+
+                        pred_1_per_class = torch.where(pred_1 == int(class_code), 1, 0)
+
+                        pred_2_per_class = torch.where(pred_2 == int(class_code), 1, 0)
+
+                        gt_per_class = torch.where(gt == int(class_code), 1, 0)
+                        # if self.include_background_metric:
+
+                        #For each class, we just want to extract the corresponding changed voxels for that given class only.
+
+                        per_class_changed_voxels[class_label] = torch.where(pred_1_per_class != pred_2_per_class, 1, 0) * gt_per_class 
+
+                
+                human_measure_information['per_class_changed_voxels'] = per_class_changed_voxels
+
             
 
         #We extract the image_size dimensions here in RAS orientation.

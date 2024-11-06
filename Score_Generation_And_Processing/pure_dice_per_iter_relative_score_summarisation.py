@@ -4,7 +4,10 @@ from pathlib import Path
 import torch 
 import numpy as np
 import csv 
-from score_generation_path_utils import path_generation 
+import sys
+from os.path import dirname as up
+utils_dir = os.path.join(up(up(os.path.abspath(__file__))))
+from Metric_Computation_Utils.score_generation_path_utils import path_generation 
 import shutil 
 import math 
 
@@ -38,8 +41,6 @@ class pure_dice_relative_score_summarisation():
         self.datetime = args['datetime']
         self.studies = args['studies'] 
         self.include_nan = args['include_nan']
-        self.num_samples = args['num_samples']
-        self.total_samples = args['total_samples']
         self.summary_dict = args['summary_dict']
 
 
@@ -104,29 +105,31 @@ class pure_dice_relative_score_summarisation():
         return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries, supported_simulation_types
           
 
-    def score_extraction(self, results_save_dir, metric):
+    def score_extraction(self, results_save_dir, base_metric):
         
         assert type(results_save_dir) == str 
         assert os.path.exists(results_save_dir) 
 
-        #obtaining the paths for all of the score files we want to merge together:
-        score_path = os.path.join(results_save_dir, f'{metric}_score_results.csv')
+        #obtaining the paths for the sample averaged scores
+        score_path_relative_scores = os.path.join(results_save_dir, base_metric + f'_per_sample_averaged_relative_to_init.csv')
+        score_path_per_iter_improvement = os.path.join(results_save_dir, base_metric + f'_per_sample_averaged_per_iter.csv')
 
-        assert os.path.exists(score_path) 
+        assert os.path.exists(score_path_relative_scores) 
+        assert os.path.exists(score_path_per_iter_improvement)
 
-        num_experiment_repeats = len(self.infer_run_nums) 
+        # num_experiment_repeats = len(self.infer_run_nums) 
 
-        valid_sample_indices = [j for sublist in [list(range(self.total_samples * i,  self.total_samples * i + self.num_samples)) for i in range(num_experiment_repeats)] for j in sublist]
+        # valid_sample_indices = [j for sublist in [list(range(self.total_samples * i,  self.total_samples * i + self.num_samples)) for i in range(num_experiment_repeats)] for j in sublist]
 
 
         #extracting the scores
         
-        with open(score_path, newline='') as f:
+        with open(score_path_relative_scores, newline='') as f:
             score_reader = csv.reader(f, delimiter=' ', quotechar='|')
             first_row = f.readline()
             first_row = first_row.strip()
             
-            scores = [[float(j)] if i > 0 else [j] for i,j in enumerate(first_row.split(','))] 
+            relative_improv_scores = [[float(j)] if i > 0 else [j] for i,j in enumerate(first_row.split(','))] 
 
             for row in score_reader:
 
@@ -135,58 +138,76 @@ class pure_dice_relative_score_summarisation():
                 
                 for index, string in enumerate(row_str_list):
                     if index > 0:
-                        scores[index].append(float(string))
+                        relative_improv_scores[index].append(float(string))
                     elif index == 0:
-                        scores[index].append(string)
+                        relative_improv_scores[index].append(string)
+        
+        with open(score_path_per_iter_improvement, newline='') as f:
+            score_reader = csv.reader(f, delimiter=' ', quotechar='|')
+            first_row = f.readline()
+            first_row = first_row.strip()
             
-            #Read all of the results, then just keep the valid indices. 
+            per_iter_improvement = [[float(j)] if i > 0 else [j] for i,j in enumerate(first_row.split(','))] 
 
-        output_scores = [scores[0]]
+            for row in score_reader:
+
+
+                row_str_list = row[0].split(',')
+                
+                for index, string in enumerate(row_str_list):
+                    if index > 0:
+                        per_iter_improvement[index].append(float(string))
+                    elif index == 0:
+                        per_iter_improvement[index].append(string)
+        
+
+        # output_scores = [scores[0]]
         
          
-        for sublist in scores[1:]:
+        # for sublist in scores[1:]:
             
-            valid_sublist = [val for i, val in enumerate(sublist) if i in valid_sample_indices]  #and not math.isnan(val)]
-            output_scores.append(valid_sublist)
+        #     valid_sublist = [val for i, val in enumerate(sublist) if i in valid_sample_indices]  #and not math.isnan(val)]
+        #     output_scores.append(valid_sublist)
+
 
         #Formatting of output scores is a nested list, the first sublist is a list of names of the image samples. Then each successive sublist is the corresponding list of scores
         #for each iteration in the segmentation output. 
 
-        return output_scores 
+        return relative_improv_scores, per_iter_improvement 
 
-    def per_sample_averaging(self, scores):
+    # def per_sample_averaging(self, scores):
         
-        num_experiments = len(self.infer_run_nums)
+    #     num_experiments = len(self.infer_run_nums)
 
-        #we assume the image names are still there in the first index! 
-        output = [scores[0]] 
+    #     #we assume the image names are still there in the first index! 
+    #     output = [scores[0]] 
 
-        #We filter the nan scores when computing averages, if for each sample there is not a non-nan score then just continue..
+    #     #We filter the nan scores when computing averages, if for each sample there is not a non-nan score then just continue..
 
-        for sublist in scores[1:]:
+    #     for sublist in scores[1:]:
             
-            current_iter_averaged = [] 
+    #         current_iter_averaged = [] 
 
-            for index in range(self.num_samples):
-                experiment_values = [sublist[j * self.num_samples + index] for j in range(num_experiments)]
+    #         for index in range(self.num_samples):
+    #             experiment_values = [sublist[j * self.num_samples + index] for j in range(num_experiments)]
                 
-                if not self.include_nan:
-                    non_nan_vals = [val for val in experiment_values if not math.isnan(float(val))]
-                    if len(non_nan_vals)  == 0:
-                        #in this case just skip to the next sample 
-                        continue 
-                    else:
-                        #in this case, we used the filtered out nan values and average.
-                        per_sample_mean = np.mean(non_nan_vals)
-                        current_iter_averaged.append(per_sample_mean)
+    #             if not self.include_nan:
+    #                 non_nan_vals = [val for val in experiment_values if not math.isnan(float(val))]
+    #                 if len(non_nan_vals)  == 0:
+    #                     #in this case just skip to the next sample 
+    #                     continue 
+    #                 else:
+    #                     #in this case, we used the filtered out nan values and average.
+    #                     per_sample_mean = np.mean(non_nan_vals)
+    #                     current_iter_averaged.append(per_sample_mean)
 
-            #We then append the per sample averaged scores for that iteration.    
-            output.append(current_iter_averaged)
+    #         #We then append the per sample averaged scores for that iteration.    
+    #         output.append(current_iter_averaged)
 
-        return output 
-    def score_summarisation(self, results_dir, filename, scores):
+    #     return output 
+
+    def score_summarisation(self, results_summarisation_dir, filename, relative_improv_scores, per_iter_improv_scores):
         
-        just_scores = scores[1:] #Nested list of per iteration scores.
         
         summarised_output = dict() #We will save the summaries into this dict, which we will then use to save the scores to a csv file.
 
@@ -203,51 +224,43 @@ class pure_dice_relative_score_summarisation():
 
             if key.title() == "Standard Deviation of Relative Improvement To Init":
 
-                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_standard_dev(relative_improv_scores, parametrisation)
+               summarised_output[key] = self.compute_standard_dev(relative_improv_scores[1:], parametrisation)
 
             elif key.title() == "Interquartile Range of Relative Improvement To Init":
                 
-                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_iqr(relative_improv_scores, parametrisation) 
+                summarised_output[key] = self.compute_iqr(relative_improv_scores[1:], parametrisation) 
 
             elif key.title() == "Mean Relative Improvement To Init":
 
-                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)  
-                summarised_output[key] = self.compute_mean(relative_improv_scores, parametrisation)
+                summarised_output[key] = self.compute_mean(relative_improv_scores[1:], parametrisation)
 
             elif key.title() == "Median Relative Improvement To Init":
-                
-                relative_improv_scores = self.compute_relative_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_median(relative_improv_scores, parametrisation)
+               
+               summarised_output[key] = self.compute_median(relative_improv_scores[1:], parametrisation)
 
 ######################################################################################
             elif key.title() == "Standard Deviation Of Per Iter Improvement":
 
-                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_standard_dev(relative_improv_scores, parametrisation)
+                summarised_output[key] = self.compute_standard_dev(per_iter_improv_scores[1:], parametrisation)
 
             elif key.title() == "Interquartile Range Of Per Iter Improvement":
-                
-                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_iqr(relative_improv_scores, parametrisation) 
+    
+                summarised_output[key] = self.compute_iqr(per_iter_improv_scores[1:], parametrisation) 
 
             elif key.title() == "Mean Per Iter Improvement":
 
-                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)  
-                summarised_output[key] = self.compute_mean(relative_improv_scores, parametrisation)
+                summarised_output[key] = self.compute_mean(per_iter_improv_scores[1:], parametrisation)
 
             elif key.title() == "Median Per Iter Improvement":
                 
-                relative_improv_scores = self.compute_per_iter_improvement(just_scores, parametrisation)
-                summarised_output[key] = self.compute_median(relative_improv_scores, parametrisation)
+                summarised_output[key] = self.compute_median(per_iter_improv_scores[1:], parametrisation)
 
 
 
 
         #Saving the summary statistics
         
-        with open(os.path.join(results_dir, filename), 'a') as f:
+        with open(os.path.join(results_summarisation_dir, filename), 'a') as f:
             writer = csv.writer(f)
             writer.writerow([])
 
@@ -257,7 +270,7 @@ class pure_dice_relative_score_summarisation():
             for score in summarised_output[summary_statistic_key]:
                 summary_stat_row.append(score) 
 
-            with open(os.path.join(results_dir, filename),'a') as f:
+            with open(os.path.join(results_summarisation_dir, filename),'a') as f:
                 
                 writer = csv.writer(f)
                 writer.writerow([])
@@ -280,26 +293,26 @@ class pure_dice_relative_score_summarisation():
 
         return [np.percentile(sublist, 75) - np.percentile(sublist, 25) for sublist in output_scores]
     
-    def compute_relative_improvement(self, output_scores, parametrisation):
-        #This is relative to the initialisation score!
-        #This requires the number of samples to be consistent throughout! 
+    # def compute_relative_improvement(self, output_scores, parametrisation):
+    #     #This is relative to the initialisation score!
+    #     #This requires the number of samples to be consistent throughout! 
         
-        num_scores = len(output_scores[0])
-        for score_list in output_scores:
-            assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the relative to initialisation score improvement computation" 
+    #     num_scores = len(output_scores[0])
+    #     for score_list in output_scores:
+    #         assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the relative to initialisation score improvement computation" 
 
-        initialisation = np.array(output_scores[0])
-        return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - initialisation for sublist in output_scores[1:]]
+    #     initialisation = np.array(output_scores[0])
+    #     return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - initialisation for sublist in output_scores[1:]]
 
-    def compute_per_iter_improvement(self, output_scores, parametrisation):
-        #This is all relative to the prior iteration's dice score. 
+    # def compute_per_iter_improvement(self, output_scores, parametrisation):
+    #     #This is all relative to the prior iteration's dice score. 
 
-        num_scores = len(output_scores[0])
+    #     num_scores = len(output_scores[0])
         
-        for score_list in output_scores:
-            assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the per-iteration relative improvement score generation"
+    #     for score_list in output_scores:
+    #         assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the per-iteration relative improvement score generation"
 
-        return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - output_scores[i] for i,sublist in enumerate(output_scores[1:])]
+    #     return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - output_scores[i] for i,sublist in enumerate(output_scores[1:])]
 
     def __call__(self):
     
@@ -383,17 +396,19 @@ class pure_dice_relative_score_summarisation():
         config_labels = class_config_dict["labels"]
 
         #Summarisation config should also be saved as a json for checking:
-        
+        results_summarisation_dir = os.path.join(results_save_dir, 'results_summarisation')
 
-        with open(os.path.join(results_save_dir, 'relative_score_summarisation_config.json'), 'w') as f:
+        os.makedirs(results_summarisation_dir, exist_ok=True)
+        
+        with open(os.path.join(results_summarisation_dir, 'relative_score_summarisation_config.json'), 'w') as f:
     
             json.dump(dict(vars(self)), f)
 
-        extracted_scores = self.score_extraction(results_save_dir, self.base_metric)
+        relative_improvement_scores, per_iter_improvement_scores = self.score_extraction(os.path.join(results_save_dir, 'per_sample_averaged_results'), self.base_metric)
 
-        filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
+        # filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
 
-        self.score_summarisation(results_save_dir, f'{self.base_metric}_relative_score_summarisation.csv', filtered_and_sample_averaged)
+        self.score_summarisation(results_summarisation_dir, f'{self.base_metric}_relative_score_summarisation.csv', relative_improvement_scores, per_iter_improvement_scores)
 
         if self.per_class_scores:
 
@@ -403,8 +418,8 @@ class pure_dice_relative_score_summarisation():
                     if class_label.title() == "Background":
                         continue 
                 
-                extracted_scores = self.score_extraction(results_save_dir, f'class_{class_label}_{self.base_metric}')
+                relative_improvement_scores, per_iter_improvement_scores = self.score_extraction(os.path.join(results_save_dir, 'per_sample_averaged_results'), f'class_{class_label}_{self.base_metric}')
                 
-                filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
+                # filtered_and_sample_averaged = self.per_sample_averaging(extracted_scores)
                 
-                self.score_summarisation(results_save_dir, f'class_{class_label}_{self.base_metric}_relative_score_summarisation.csv', filtered_and_sample_averaged)
+                self.score_summarisation(results_summarisation_dir, f'class_{class_label}_{self.base_metric}_relative_score_summarisation.csv', relative_improvement_scores, per_iter_improvement_scores)
