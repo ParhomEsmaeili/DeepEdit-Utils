@@ -11,9 +11,8 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "10072024_182402"  #The name of the model datetime which is under consideration
-    args['checkpoint'] = "best_val_score_epoch" #"best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
-    args["inference_run_num"] = '1'  #The number of the inference run which is under consideration (for probabilistic simulation of clicks at inference)
+    args['datetime'] = "20241104_135136"  #The name of the model datetime which is under consideration
+    args['checkpoint'] = "best_val_score_epoch" #"best_val_score_epoch" #"best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args['inference_run_parametrisation'] = {
         "None":["None"]
     }
@@ -68,9 +67,12 @@ if __name__ == '__main__':
     
     args['dataset_subset'] = 'validation' #The argument which determines whether we are computing scores for the validation outputs, or for the test segmentation outputs. 
 
-    score_generator = test_scores(args)
+    for i in range(3):
+        args["inference_run_num"] = str(i) #The number of the inference run which is under consideration (for probabilistic simulation of clicks at inference)
+    
+        score_generator = test_scores(args)
 
-    score_generator() 
+        score_generator() 
 
 
     

@@ -99,7 +99,7 @@ class score_merging_class():
         return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_simulation_types
           
 
-    def score_collection(self, results_save_dir, infer_run_nums, score_files_base_dir, metric, rejection_value=0):
+    def score_collection(self, output_save_dir, infer_run_nums, score_files_base_dir, metric, rejection_value=0):
         #obtaining the paths for all of the score files we want to merge together:
         score_paths = [os.path.join(score_files_base_dir, f'run_{run_num}') for run_num in infer_run_nums]
 
@@ -145,7 +145,7 @@ class score_merging_class():
                 non_rejected_rows.append(dice_score_row[1:])
         
         
-        with open(os.path.join(results_save_dir, f'{metric}_score_results.csv'),'a') as f:
+        with open(os.path.join(output_save_dir, f'{metric}_score_results.csv'),'a') as f:
             writer = csv.writer(f)
             
             for i in range(len(final_output_scores[0])):
@@ -221,6 +221,8 @@ class score_merging_class():
 
         _, results_save_dir = path_generation_class()
         
+        output_save_dir = os.path.join(results_save_dir, 'raw_results')
+
         #We extract the dictionary of class-label - class-code correspondences. This should be located in the upper folder for the dataset at hand.
 
         label_config_path = os.path.join(self.app_dir_path, 'datasets', self.studies, 'label_configs.txt')
@@ -235,14 +237,14 @@ class score_merging_class():
 
 
         #If an existing set of results exists for the result directory then it should be deleted! We are not rewriting scores.
-        if os.path.exists(results_save_dir) == True:
-            shutil.rmtree(results_save_dir)
-        os.makedirs(results_save_dir)
+        if os.path.exists(output_save_dir) == True:
+            shutil.rmtree(output_save_dir)
+        os.makedirs(output_save_dir)
 
         #Extracting the base directory that each of the folders containing scores exists within:
         results_base_dir = os.path.dirname(results_save_dir)
 
-        self.score_collection(results_save_dir, self.infer_run_nums, results_base_dir, self.base_metric, 0)
+        self.score_collection(output_save_dir, self.infer_run_nums, results_base_dir, self.base_metric, 0)
 
         if self.per_class_scores:
 
@@ -252,4 +254,4 @@ class score_merging_class():
                     if class_label.title() == "Background":
                         continue 
                 
-                self.score_collection(results_save_dir, self.infer_run_nums, results_base_dir, f'class_{class_label}_{self.base_metric}', 0)
+                self.score_collection(output_save_dir, self.infer_run_nums, results_base_dir, f'class_{class_label}_{self.base_metric}', 0)

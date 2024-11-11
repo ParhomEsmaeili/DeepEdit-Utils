@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetimes'] = ["10072024_182402", "10072024_201348"]  #The name of the model datetimes which are under consideration, OR the nnU-net model name, for example. 
+    args['datetimes'] = ["20241102_121843", "20241104_135136"]  #The name of the model datetimes which are under consideration, OR the nnU-net model name, for example. 
 
     args['checkpoints'] = ["best_val_score_epoch", "best_val_score_epoch"] #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are under consideration (after being sample averaged across these)
@@ -35,7 +35,9 @@ if __name__ == '__main__':
     args['gt_weightmap_types'] = ["None"]
     #The list of the click-based weightmap types (non-parametric), e.g. connected component, or none.
 
-    args['base_metric'] = 'Dice'
+    # args['base_metric'] = 'Dice'
+    args['base_metric'] = 'Error Rate'
+
     # The base metric being used for computation of the metric scores
 
     args['derived_metric'] = ['Default',
@@ -45,7 +47,8 @@ if __name__ == '__main__':
     #Any derived metric which is being computed also, e.g. relative improvement in standard dice score.
 
     # args['human_measure'] = 'None'
-    args['human_measure'] = 'Local Responsiveness'
+    # args['human_measure'] = 'Local Responsiveness'
+    args['human_measure'] = 'Temporal Non Worsening'
     
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
@@ -53,7 +56,7 @@ if __name__ == '__main__':
     
     args['app_dir'] = 'DeepEditPlusPlus Development/DeepEditPlusPlus' #The path to the app directory from the base/home directory.
 
-    args['include_background_metric'] = False #The bool which determines whether we use the background class for generating and outputting, multi-class and per class scores. 
+    args['include_background_metric'] = False #The bool which determines whether we used the background class for generating and outputting, multi-class and per class scores. 
     
     args['dataset_subset'] = 'validation' #The argument which determines whether we are computing scores for the validation outputs, or for the test segmentation outputs. 
 
@@ -63,7 +66,11 @@ if __name__ == '__main__':
 
     # args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
 
-    args['per_class_scores'] = False 
+    args['per_class_scores'] = False # Whether it should be applied for each class or not. We almost always have this equal to false because we only really care about the
+    #cross-class score. The per-class scores are just there for a sanity check. 
+    
+    # #TODO: However, we should consider that we may want to implement this for the pure dice score!?
+
 
     args['statistical_test'] = {
         'Wilcoxon Signed Rank Test': {'p_value':0.05},

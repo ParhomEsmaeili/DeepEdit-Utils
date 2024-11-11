@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "10072024_182402"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
+    args['datetime'] = "20241104_135136"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
 
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
@@ -46,11 +46,13 @@ if __name__ == '__main__':
     args['gt_weightmap_types'] = ["None"]
     #The list of the click-based weightmap types (non-parametric), e.g. connected component, or none.
 
-    args['base_metric'] = 'Dice'
+    # args['base_metric'] = 'Dice'
+    args['base_metric'] = 'Error Rate'
     # The base metric being used for computation of the metric scores
 
-    # args['human_measure'] = 'None' #'Local Responsiveness'
-    args['human_measure'] = 'Local Responsiveness' 
+    # args['human_measure'] = 'None' 
+    # args['human_measure'] = 'Local Responsiveness' 
+    args['human_measure'] = 'Temporal Non Worsening'
 
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
@@ -60,7 +62,7 @@ if __name__ == '__main__':
 
     # args['include_background_mask'] = True #The bool which determines whether we use the background points for generating the weighting mask
 
-    args['include_background_metric'] = False #The bool which determines whether we use the background class for generating and outputting, multi-class and per class scores. 
+    args['include_background_metric'] = True #The bool which determines whether we used the background class for generating and outputting, multi-class and per class scores. 
     
     # args['ignore_empty'] = True #The bool which determines whether we ignore the scores for instances where there is no denominator (because there was no ground truth) 
 

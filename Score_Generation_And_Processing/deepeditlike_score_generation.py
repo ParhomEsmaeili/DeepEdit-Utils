@@ -297,11 +297,11 @@ class test_scores():
                                 writer = csv.writer(f)
                                 writer.writerow(scores[class_label])
 
-                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
                 else:
-                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
@@ -365,16 +365,16 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, 'raw_results', f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
                                 writer = csv.writer(f)
                                 writer.writerow(scores[class_label])
 
-                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
                 else:
-                    with open(os.path.join(results_save_dir, 'raw_results', f'{base_metric}_score_results.csv'),'a') as f:
+                    with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
                         writer.writerow(scores['cross_class'])
 
@@ -1015,7 +1015,7 @@ class test_scores():
                         
                         if self.human_measure == "Temporal Non Worsening":
                             #In this case the prior iter was an edit iter.
-                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'label', iteration_folders[-1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
                         
 
                         elif self.human_measure == "Local Responsiveness":
