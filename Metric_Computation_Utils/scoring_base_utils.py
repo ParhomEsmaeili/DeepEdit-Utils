@@ -86,19 +86,20 @@ class DiceScoreUtils:
         y_o = torch.sum(torch.where(class_sep_gt > 0, 1, 0) * image_mask)
         y_hat_o = torch.sum(torch.where(class_sep_pred > 0, 1, 0) * image_mask)
         
+        denom = y_o + y_hat_o
         # weighted_pred = class_sep_pred * image_mask 
         # weighted_gt = class_sep_gt * image_mask 
 
         intersection = torch.sum(torch.masked_select(image_mask, class_sep_pred * class_sep_gt > 0))
 
         if y_o > 0:
-            return torch.tensor([(2 * intersection)/(y_o + y_hat_o)])
+            return torch.tensor([(2 * intersection)/(denom)])
         
-        if ignore_empty:
-            #If we ignore empty then just return a nan value
+        if ignore_empty or denom.isnan():
+            #If we ignore empty or the click set was empty then just return a nan value
             return torch.tensor([float("nan")])
         
-        if y_o + y_hat_o <=0:
+        if denom <=0:
             #If we do not ignore empties, then return a value of 1 if the denom is <=0 (i.e. when both are empty) to indicate full coverage...
             return torch.tensor([1.0])
         
@@ -144,8 +145,8 @@ class DiceScoreUtils:
             return torch.tensor([(2.0 * intersection) / (y_o + y_hat_o)])
         
         
-        if ignore_empty:
-            #If we ignore empty then just return a nan value
+        if ignore_empty or denorm.isnan():
+            #If we ignore empty or the click set was empty, then just return a nan value
             return torch.tensor([float("nan")])
         
         denorm = y_o + y_hat_o
@@ -238,9 +239,10 @@ class ErrorRateUtils:
 
             return error_rate 
 
-        if ignore_empty:
+        if ignore_empty or weighted_denom.isnan():
+            #if ignore empty or the mask was empty (due to the click set OR due to the changed voxels set.)
             return torch.tensor([float("nan")])
-            
+        
         if weighted_denom <= 0:
             #If there are no changed voxels (this is when the denom would = 0), then just return an error rate of 0.
             return torch.tensor([float(0)])

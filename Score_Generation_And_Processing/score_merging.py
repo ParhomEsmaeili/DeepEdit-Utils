@@ -64,6 +64,7 @@ class score_merging_class():
                                     'Cuboid', 
                                     'Scaled Euclidean Distance',
                                     'Exponentialised Scaled Euclidean Distance',
+                                    'Binarised Exponentialised Scaled Euclidean Distance',
                                     '2D Intersections', 
                                     'None']
         
@@ -72,6 +73,7 @@ class score_merging_class():
             
         supported_human_measures = ['Local Responsiveness',
                                     'Temporal Non Worsening',
+                                    'Temporal Consistency',
                                     'None'] 
         supported_base_metrics = ['Dice',
                                 'Error Rate']

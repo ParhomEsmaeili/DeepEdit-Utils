@@ -77,6 +77,7 @@ class sample_averaged_score_generator():
                                     'Cuboid', 
                                     'Scaled Euclidean Distance',
                                     'Exponentialised Scaled Euclidean Distance',
+                                    'Binarised Exponentialised Scaled Euclidean Distance',
                                     '2D Intersections', 
                                     'None']
         
@@ -85,6 +86,7 @@ class sample_averaged_score_generator():
             
         supported_human_measures = ['Local Responsiveness',
                                     'Temporal Non Worsening',
+                                    'Temporal Consistency',
                                     'None'] 
         supported_base_metrics = ['Dice',
                                 'Error Rate']

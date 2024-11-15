@@ -85,6 +85,7 @@ class statistical_significance_assessment:
                                     'Cuboid', 
                                     'Scaled Euclidean Distance',
                                     'Exponentialised Scaled Euclidean Distance',
+                                    'Binarised Exponentialised Scaled Euclidean Distance',
                                     '2D Intersections', 
                                     'None']
         
@@ -93,6 +94,7 @@ class statistical_significance_assessment:
             
         supported_human_measures = ['Local Responsiveness',
                                     'Temporal Non Worsening',
+                                    'Temporal Consistency',
                                     'None'] 
         
         supported_base_metrics = ['Dice',

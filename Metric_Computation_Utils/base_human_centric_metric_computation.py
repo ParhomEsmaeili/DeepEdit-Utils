@@ -73,12 +73,20 @@ class score_tool():
             Orientationd(keys=("pred_1","pred_2", "gt"), axcodes="RAS")
             ]  
 
+        if self.human_measure == "Temporal Consistency": #In this case there is no comparison to a ground truth. The "GT" in the metric will be the prior predictions.
+            self.transforms_list = [
+            LoadImaged(keys=("pred_1", "pred_2"), reader="ITKReader", image_only=False),
+            EnsureChannelFirstd(keys=("pred_1", "pred_2")),
+            Orientationd(keys=("pred_1", "pred_2"), axcodes="RAS")
+            ]
+
         self.transforms_composition = Compose(self.transforms_list, map_items = False)
     
         self.supported_click_weightmaps = ['Ellipsoid',
                                             'Cuboid', 
                                             'Scaled Euclidean Distance',
                                             'Exponentialised Scaled Euclidean Distance',
+                                            'Binarised Exponentialised Scaled Euclidean Distance'
                                             '2D Intersections', 
                                             'None']
         
@@ -86,16 +94,18 @@ class score_tool():
                                         'None']
             
         self.supported_human_measures_dice = ['Local Responsiveness',
-                                        # 'Temporal Non Worsening',
+                                        'Temporal Consistency', #Difference between temporal consistency and temporal non worsening is that the former
+                                        #is not filtered by the changed voxels pre and post-click.
+
                                         'None'] #In this context, None = Default global dice score.
         
         self.supported_human_measures_error_rate = ['Temporal Non Worsening',
                                                     ]
 
-        if any([weightmap not in self.supported_click_weightmaps + self.supported_gt_weightmaps for weightmap in self.click_weightmap_types]):
+        if any([weightmap not in self.supported_click_weightmaps for weightmap in self.click_weightmap_types]):
             raise ValueError("The selected click weightmap type is not supported by the mask generator utilities")
         
-        if any([weightmap not in self.supported_click_weightmaps + self.supported_gt_weightmaps for weightmap in self.gt_weightmap_types]):
+        if any([weightmap not in self.supported_gt_weightmaps for weightmap in self.gt_weightmap_types]):
             raise ValueError("The selected gt weightmap type is not supported by the mask generator utilities") 
         
         if self.metric_base == 'Dice':
@@ -157,16 +167,22 @@ class score_tool():
         '''
         
         assert type(pred_folder_paths) == list 
-        assert type(gt_folder_path) == str 
+        assert type(gt_folder_path) == str or gt_folder_path == None 
         assert type(image_name) == str 
         assert type(guidance_points_set) == dict
         assert type(guidance_points_parametrisations) == dict  
         
         pred_image_paths = [os.path.join(pred_folder_path, image_name) for pred_folder_path in pred_folder_paths]
-        gt_image_path = os.path.join(gt_folder_path, image_name)
+        gt_image_path = os.path.join(gt_folder_path, image_name) if gt_folder_path != None else None 
 
         if self.human_measure == "Local Responsiveness" or self.human_measure == "None":
-            
+            assert gt_folder_path != None 
+
+            if self.include_background_metric:
+                assert self.include_background_mask == True 
+            else:
+                pass 
+
             input_dict = {"pred":pred_image_paths[0], "gt":gt_image_path}
             output_dict = self.transforms_composition(input_dict)
 
@@ -179,7 +195,7 @@ class score_tool():
             #We extract the first channel since it is a batchwise function.
 
         elif self.human_measure == "Temporal Non Worsening":
-            
+            assert gt_folder_path != None
             #We place an initial assertion that the following configurations are permitted for the error rate generation:
 
             if self.include_background_metric == True:
@@ -263,10 +279,30 @@ class score_tool():
                 human_measure_information['per_class_changed_voxels'] = per_class_changed_voxels
 
             
+        elif self.human_measure == "Temporal Consistency":
+            
+            assert gt_folder_path == None 
+
+            if self.include_background_metric:
+                assert self.include_background_mask == True 
+            else:
+                pass 
+
+            input_dict = {"pred_1":pred_image_paths[0], "pred_2":pred_image_paths[1]}
+            output_dict = self.transforms_composition(input_dict)
+
+            #Output dict will contain the extracted pred(s) in RAS orientation. 
+            final_pred = torch.tensor(output_dict['pred_2'][0])
+            gt = torch.tensor(output_dict['pred_1'][0])
+
+            human_measure_information = None 
+            
+            #We extract the first channel since it is a batchwise function.
+
 
         #We extract the image_size dimensions here in RAS orientation.
         
-        image_dims = output_dict["gt"].size()[1:]
+        image_dims = gt.size()
 
         cross_class_map, per_class_maps = self.mask_generator(guidance_points_set, guidance_points_parametrisations, self.include_background_mask, human_measure_information, image_dims, gt)
         

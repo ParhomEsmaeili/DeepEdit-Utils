@@ -23,7 +23,8 @@ if __name__ == '__main__':
  
     args['click_weightmap_dict'] = {
         # "None":["None"]
-         "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
+        #  "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
+        'Ellipsoid':[10,10,10]
     } 
 
     args["simulation_type"] = 'probabilistic' #The param which controls whether the simulation of the click was probabilistic or deterministic. 
@@ -34,14 +35,16 @@ if __name__ == '__main__':
     args['gt_weightmap_types'] = ["None"]
     #The list of the click-based weightmap types (non-parametric), e.g. connected component, or none.
 
-    # args['base_metric'] = 'Dice'
-    args['base_metric'] = 'Error Rate'
+    args['base_metric'] = 'Dice'
+    # args['base_metric'] = 'Error Rate'
 
     # The base metric being used for computation of the metric scores
 
     # args['human_measure'] = 'None' 
     # args['human_measure'] = 'Local Responsiveness' 
-    args['human_measure'] = 'Temporal Non Worsening'
+    # args['human_measure'] = 'Temporal Non Worsening'
+    args['human_measure'] = 'Temporal Consistency' 
+
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
     args['inference_run_mode'] = ['Editing', 'Autoseg', '10'] # The inference run mode which we want to perform score computation for, if it is just an initiatlisation then this is just one item long.

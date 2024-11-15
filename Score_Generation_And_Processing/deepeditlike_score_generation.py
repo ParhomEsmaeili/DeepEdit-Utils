@@ -69,6 +69,7 @@ class test_scores():
                                     'Cuboid', 
                                     'Scaled Euclidean Distance',
                                     'Exponentialised Scaled Euclidean Distance',
+                                    'Binarised Exponentialised Scaled Euclidean Distance',
                                     '2D Intersections', 
                                     'None']
         
@@ -77,6 +78,7 @@ class test_scores():
             
         supported_human_measures = ['Local Responsiveness',
                                     'Temporal Non Worsening',
+                                    'Temporal Consistency',
                                     'None'] 
         supported_base_metrics = ['Dice',
                                 'Error Rate']
@@ -682,7 +684,7 @@ class test_scores():
                                config_labels, 
                                sequentiality_mode):
         '''
-        This method is typically assumed to be used for temporal non-worsening, and as such the code downstream will find the changed voxels, and perform metrics by comparing those voxels to the 
+        This method is typically assumed to be used for temporal non-worsening or for computing deltas in local scores, and as such the code downstream will find the changed voxels, and perform metrics by comparing those voxels to the 
         true ground truth.
 
         This method should compute the metric scores for the set of images and task which has been provided. It should 
@@ -718,7 +720,7 @@ class test_scores():
         
         assert sequentiality_mode in ['SIM'], "The sequentiality mode was not supported for metric computation. It should only be for the SIM (1 iter assumed)"
 
-        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening"], "The human measure did not match the supported ones"
+        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening", "Temporal Consistency"], "The human measure did not match the supported ones"
 
         #For temporal consistency measurement scores, this only applies to inference runs with iterative refinement. NOT for methods with only one iteration.
         
@@ -782,9 +784,13 @@ class test_scores():
                     if index == 0:
                         #In this case it is the first editing iteration, and so we use the init folder, and the first iteration folder. 
 
-                        #If temporal consistency score
+                        #If temporal non worsening then it computes the score against a ground truth.
                         if self.human_measure == 'Temporal Non Worsening':
                             cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        
+                        elif self.human_measure == 'Temporal Consistency': #This compares predictions pre and post click weighted by a corresponding mask.
+                            cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], None, image, guidance_points_dict, guidance_points_parametrisations)
+
                         elif self.human_measure == "Local Responsiveness":
                             #In this case, we want to find the pre and post-click segmentation scores weighted by the mask for the given iteration.
                             cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
@@ -799,10 +805,14 @@ class test_scores():
                     else:
                         #In this case it is a non-first editing iteration, iteration. So we just use the current and prior iteration folders. 
                         
-                        #If temporal consistency score
+                        #If temporal non worsening score
                         if self.human_measure == 'Temporal Non Worsening':
                             cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
                         
+                        elif self.human_measure == 'Temporal Consistency':
+
+                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], None, image, guidance_points_dict, guidance_points_parametrisations)
+
                         elif self.human_measure == "Local Responsiveness":
                             #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
                             cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1])], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
@@ -838,6 +848,10 @@ class test_scores():
                 
                 if self.human_measure == "Temporal Non Worsening":
                     cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
+
+                elif self.human_measure == "Temporal Consistency":
+
+                    cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], None, image, guidance_points_final, guidance_final_parametrisations)
 
                 elif self.human_measure == "Local Responsiveness":
                     
@@ -939,7 +953,7 @@ class test_scores():
         
         assert sequentiality_mode in ['CIM'], "The sequentiality mode was not supported for metric computation. It should only be for the SIM (1 iter assumed) since the base metrics are irrespective of any guidance point info"
         
-        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening"], "The human measure did not match the supported ones"
+        assert human_measure.title() in ["Local Responsiveness", "Temporal Non Worsening", "Temporal Consistency"], "The human measure did not match the supported ones"
         
         if infer_run_mode[0].title() == "Editing":
 
@@ -992,14 +1006,21 @@ class test_scores():
                     submitted_iter_infos = iter_infos[-2:]
 
                     guidance_points_dict, guidance_points_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, submitted_iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
-                
+                    
+                    # if image_names.index(image) == 189:
+
+                    #     print('stop') 
                     if index == 0:
                         #In this case the prior iter was the initialisation. 
 
                         if self.human_measure == "Temporal Non Worsening":
 
                             cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder, os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
-                    
+
+                        if self.human_measure == 'Temporal Consistency':
+
+                            cross_class_score, per_class_scores_dict = editing_score_tool([initialisation_folder,os.path.join(img_directory_path, 'labels', iteration_folder)], None, image, guidance_points_dict, guidance_points_parametrisations)
+
                         elif self.human_measure == "Local Responsiveness":
                             #In this case, we want to find the pre and post-click segmentation scores weighted by the mask for the given iteration.
                             cross_class_score_pre_click, per_class_scores_dict_pre_click = editing_score_tool([initialisation_folder], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
@@ -1014,8 +1035,12 @@ class test_scores():
                     else:
                         
                         if self.human_measure == "Temporal Non Worsening":
-                            #In this case the prior iter was an edit iter.
+                            
                             cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], gt_image_folder, image, guidance_points_dict, guidance_points_parametrisations)
+                        
+                        elif self.human_measure == 'Temporal Consistency':
+                            
+                            cross_class_score, per_class_scores_dict = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[index - 1]), os.path.join(img_directory_path, 'labels', iteration_folder)], None, image, guidance_points_dict, guidance_points_parametrisations)
                         
 
                         elif self.human_measure == "Local Responsiveness":
@@ -1056,7 +1081,11 @@ class test_scores():
                 if self.human_measure == "Temporal Non Worsening":
     
                     cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], gt_image_folder, image, guidance_points_final, guidance_final_parametrisations)
-            
+
+                elif self.human_measure == "Temporal Consistency":
+
+                    cross_class_score_final, per_class_scores_dict_final = editing_score_tool([os.path.join(img_directory_path, 'labels', iteration_folders[-1]), final_image_folder], None, image, guidance_points_final, guidance_final_parametrisations)
+
                 elif self.human_measure == "Local Responsiveness":
                     
                     #In this case we want to find the pre and post click segmentation scores weighted by the mask for the current editing iteration 
@@ -1166,7 +1195,7 @@ class test_scores():
                 self.cim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
     
 
-    def temporal_consist_score_computation(self,
+    def temporal_non_worse_score_computation(self,
                                            scoring_tools, 
                                            infer_run_mode, 
                                            img_directory_path, 
@@ -1222,6 +1251,60 @@ class test_scores():
             self.cim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
 
                                            
+    def temporal_consist_score_computation(self,
+                                           scoring_tools, 
+                                           infer_run_mode, 
+                                           img_directory_path, 
+                                           results_save_dir, 
+                                           weightmap_parametrisations, 
+                                           human_measure, 
+                                           base_metric, 
+                                           per_class_scores,
+                                           include_background_metric,
+                                           config_labels, 
+                                           sequentiality_mode):
+        '''
+        This method should compute the metric scores for the set of images and task which has been provided. It should 
+        #save this in a csv file, the metric scores returned should provide the metric scores across all the images
+        #that have been provided.
+        # 
+        Inputs: 
+        The scoring tools which we will throughout the iterations as applicable. This can vary depending on the mode because autoseg modes would have no points!
+
+        Image directory which contains all of the images as nii.gz files, and a folder containing the predicted labels and the ground truth label (denoted original)
+        Inference task: The name of the inference run for which the scores are being computed, i.e. editing or initialisation only.
+        Results save dir: The base directory which the results will all be saved to.
+        weightmap_parametrisations: The dict containing the weightmap type names, and the corresponding parametrisations being used across all of the points in this computation.
+        human_measure: The measure of performance, i.e. local responsiveness or temporal consistency.
+        base_metric: The base metric being used for performance evaluation.
+        per_class_scores: The bool which tells us whether we are only generating multi-class scores, or whether we also output a dict of class separated scores ALSO.
+        config_labels: The dict of class label - class code relationships.
+        sequentiality mode: The mode which the click sets are assumed to be in (E.g. CIM/accumulated across iters, or SIM/only the clicks for the current iter.)
+        '''
+        assert type(scoring_tools) == dict 
+        assert type(infer_run_mode) == list, "Infer run config was not provided as a list"
+        assert len(infer_run_mode) == 3, "Infer run config was not of the appropriate setup"
+        assert type(weightmap_parametrisations) == dict 
+        assert type(human_measure) == str 
+        assert type(base_metric) == str
+        assert type(per_class_scores) == bool 
+        assert type(include_background_metric) == bool 
+        assert type(config_labels) == dict 
+    
+        
+        assert sequentiality_mode in ['CIM', 'SIM'], "The sequentiality mode was not supported for metric computation."
+
+        assert human_measure.title() == "Temporal Consistency", "Human measure did not match the computation function"
+
+        #In this case, the prediction, the ground truth, and the guidance points set, and the parametrisations for the weightmap for the metric are provided (only for a given iter). 
+
+        if sequentiality_mode == "SIM":
+            
+            self.sim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
+        
+        if sequentiality_mode == "CIM":
+
+            self.cim_temporal_computation(scoring_tools, infer_run_mode, img_directory_path, results_save_dir, weightmap_parametrisations, human_measure, base_metric, per_class_scores, include_background_metric, config_labels, sequentiality_mode)
 
 
 
@@ -1325,7 +1408,7 @@ class test_scores():
         click_weightmap_types = list(self.click_weightmaps_dict.keys())
         gt_weightmap_types = self.gt_weightmap_types
 
-        if self.base_metric == 'Dice':
+        if self.base_metric == 'Dice' and self.human_measure != 'Temporal Non Worsening' and self.human_measure != 'Temporal Consistency':
             #IF there is an autoseg mode, OR, if we are computing for an autoseg init. then we need to allow for side-stepping of the fact that there is no guidance points/parametrisations applicable
 
             if self.infer_run_mode[0].title() == "Autoseg":
@@ -1343,6 +1426,14 @@ class test_scores():
             if self.infer_run_mode[0].title() == "Interactive":
 
                 metric_computer_tools = {"Interactive":score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)}
+
+
+        if self.base_metric == 'Dice' and self.human_measure == 'Temporal Consistency':
+            assert len(self.infer_run_mode) > 1
+
+            metric_computer_tools = {
+                                    "Editing": score_tool(config_labels, self.human_measure, click_weightmap_types, gt_weightmap_types, self.base_metric, self.include_background_mask, self.include_background_metric, self.ignore_empty, self.per_class_scores)
+                                    }
 
         elif self.base_metric == 'Error Rate':
             #Currently this is only supported/intended for cross-iteration temporal non-worsening, therefore support is only provided for that infer mode.
@@ -1387,6 +1478,21 @@ class test_scores():
                                         )
 
         elif self.human_measure == "Temporal Non Worsening":
+
+            self.temporal_non_worse_score_computation(metric_computer_tools,
+                                                    self.infer_run_mode,
+                                                    inference_output_dir_path,
+                                                    results_save_dir,
+                                                    self.click_weightmaps_dict,
+                                                    self.human_measure,
+                                                    self.base_metric,
+                                                    self.per_class_scores,
+                                                    self.include_background_metric,
+                                                    config_labels,
+                                                    self.sequentiality_mode
+                                                    )
+
+        elif self.human_measure == "Temporal Consistency":
 
             self.temporal_consist_score_computation(metric_computer_tools,
                                                     self.infer_run_mode,

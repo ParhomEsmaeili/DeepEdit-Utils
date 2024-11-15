@@ -24,7 +24,8 @@ if __name__ == '__main__':
  
     args['click_weightmap_dict'] = {
         # "None":["None"]
-        "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
+        # "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
+        'Ellipsoid':[10,10,10]
     } 
 
     #The dict of click-based weightmap types and their parametrisations which are applied for the generation of the mask in metric computation, e.g. ellipsoid, scaled euclidean etc.
@@ -49,14 +50,15 @@ if __name__ == '__main__':
     # args['human_measure'] = 'None'
     # args['human_measure'] = 'Local Responsiveness'
     args['human_measure'] = 'Temporal Non Worsening'
-    
+    # args['human_measure'] = 'Temporal Consistency'
+
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
     args['inference_run_mode'] = ['Editing', 'Autoseg', '10'] # The inference run mode which we want to perform score computation for, if it is just an initiatlisation then this is just one item long.
     
     args['app_dir'] = 'DeepEditPlusPlus Development/DeepEditPlusPlus' #The path to the app directory from the base/home directory.
 
-    args['include_background_metric'] = False #The bool which determines whether we used the background class for generating and outputting, multi-class and per class scores. 
+    args['include_background_metric'] = True #The bool which determines whether we used the background class for generating and outputting, multi-class and per class scores. 
     
     args['dataset_subset'] = 'validation' #The argument which determines whether we are computing scores for the validation outputs, or for the test segmentation outputs. 
 

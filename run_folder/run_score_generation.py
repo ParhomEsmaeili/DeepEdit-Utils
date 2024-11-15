@@ -23,16 +23,25 @@ if __name__ == '__main__':
     
     args["simulation_type"] = 'probabilistic' #The param which controls whether the simulation of the click was probabilistic or deterministic. 
 
-    args['click_weightmap_dict'] = {
-        "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
-    } 
+    # args['click_weightmap_dict'] = {
+    #     "Exponentialised Scaled Euclidean Distance":[1,1,1,2/(3**2)] 
+           #The final value is 0.5/variance. First few are the per axis scaling of the covariance matrix.
+
+    # } 
     # args['click_weightmap_dict'] = {
     #     "None": ["None"]
     # }
     # args['click_weightmap_dict'] = {
-    #     "Ellipsoid":[30,30,30]
+    #     "Ellipsoid": [10,10,10] #The values correspond to the each axis
     # }
+    # args['click_weightmap_dict'] = {
+    #     'Binarised Exponentialised Scaled Euclidean Distance' : [1,1,1,2/(3 ** 2),0.6] 
+    #      #This is similar to a multivariate gaussian..., first few params are per axis scaling,
+    #       2 final params are 0.5/variance and binarisation probability
+    # 
+    #       NOTE: For isotropic gaussians we can just use probability at N standard deviations (e.g. N=1 it would be 0.607 for a non-normalised gaussian.)
 
+    # }
 
     #The dict of click-based weightmap types and their parametrisations which are applied for the generation of the mask in metric computation, e.g. ellipsoid, scaled euclidean etc.
     #The value must always be a list! 
@@ -40,14 +49,15 @@ if __name__ == '__main__':
     args['gt_weightmap_types'] = ["None"]
     #The list of the click-based weightmap types (non-parametric), e.g. connected component, or none.
 
-    # args['base_metric'] = 'Dice'
-    args['base_metric'] = 'Error Rate'
+    args['base_metric'] = 'Dice'
+    # args['base_metric'] = 'Error Rate'
     
     # The base metric being used for computation of the metric scores
 
     # args['human_measure'] = 'None' 
     # args['human_measure'] = 'Local Responsiveness'
-    args['human_measure'] = 'Temporal Non Worsening'
+    # args['human_measure'] = 'Temporal Non Worsening'
+    args['human_measure'] = 'Temporal Consistency'
 
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 

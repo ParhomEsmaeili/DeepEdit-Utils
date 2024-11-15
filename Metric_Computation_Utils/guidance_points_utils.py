@@ -212,6 +212,9 @@ def  guidance_parametrisation_generator(guidance_points_dict, weightmap_parametr
 
             guidance_params_output_dict[weightmap_type] = weightmap_type_dict 
     
+    else:
+        raise NotImplementedError
+        #TODO: Consider that for a dynamic click size, that the way of measuring performance is by comparing performance averaged over click size variation.
     return guidance_params_output_dict
 
             
