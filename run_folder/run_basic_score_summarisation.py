@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "20241104_135136"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
+    args['datetime'] = "20241118_214053"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
 
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
@@ -31,15 +31,10 @@ if __name__ == '__main__':
     args['click_weightmap_dict'] = {
         # 'None':['None']
         # "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
-        'Ellipsoid':[10,10,10]
+        'Ellipsoid':[5,5,5]
     } 
 
     args["simulation_type"] = 'probabilistic' #The param which controls whether the simulation of the click was probabilistic or deterministic. 
-
-    # args['click_weightmap_dict'] = {
-    #     "Ellipsoid":[30,30,30]
-    # }
-
 
     #The dict of click-based weightmap types and their parametrisations which are applied for the generation of the mask in metric computation, e.g. ellipsoid, scaled euclidean etc.
     #The value must always be a list! 

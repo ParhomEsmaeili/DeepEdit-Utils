@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "20241104_135136"  #The name of the model datetime which is under consideration
+    args['datetime'] = "20241102_121843"  #The name of the model datetime which is under consideration
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
     args['inference_run_parametrisation'] = {
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     args['click_weightmap_dict'] = {
         # "None":["None"]
         #  "Exponentialised Scaled Euclidean Distance":[1,1,1,1]
-        'Ellipsoid':[10,10,10]
+        'Ellipsoid':[5,5,5]
     } 
 
     args["simulation_type"] = 'probabilistic' #The param which controls whether the simulation of the click was probabilistic or deterministic. 
@@ -41,13 +41,13 @@ if __name__ == '__main__':
     # The base metric being used for computation of the metric scores
 
     # args['human_measure'] = 'None' 
-    # args['human_measure'] = 'Local Responsiveness' 
+    args['human_measure'] = 'Local Responsiveness' 
     # args['human_measure'] = 'Temporal Non Worsening'
-    args['human_measure'] = 'Temporal Consistency' 
+    # args['human_measure'] = 'Temporal Consistency' 
 
     #The human measure which is being for metric mask-generation, e.g. local responsiveness.
 
-    args['inference_run_mode'] = ['Editing', 'Autoseg', '10'] # The inference run mode which we want to perform score computation for, if it is just an initiatlisation then this is just one item long.
+    args['inference_run_mode'] = ['Interactive'] #['Editing', 'Autoseg', '10'] # The inference run mode which we want to perform score computation for, if it is just an initiatlisation then this is just one item long.
     
     args['app_dir'] = 'DeepEditPlusPlus Development/DeepEditPlusPlus' #The path to the app directory from the base/home directory.
 

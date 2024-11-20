@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     args = dict() 
     args['studies'] = "BraTS2021_Training_Data_Split_True_proportion_0.8_channels_t2_resized_FLIRT_binarised" #The name of the dataset which contains all of the images, segmentations, class configs etc.
-    args['datetime'] = "20241104_135136"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
+    args['datetime'] = "20241115_161233"  #The name of the model datetime which is under consideration, OR the nnU-net model name, for example. 
 
     args['checkpoint'] = "best_val_score_epoch" #The name of the epoch of the model datetime which has been used for inference.
     args["inference_run_nums"] = ['0','1','2']  #The list of the inference run nums which are being merged
@@ -67,14 +67,22 @@ if __name__ == '__main__':
     # args['total_samples'] = 200 #The argument which controls the maximum number of total samples that could be available to be used for score summarisation 
 
     args['summary_dict'] = {
-        'Mean Relative Improvement to Init': None, 
-        'Median Relative Improvement to Init': None, 
+        'Mean Relative Improvement to Init': None,
+        'Median Relative Improvement to Init': None,
         'Standard Deviation of Relative Improvement to Init': None,
         'Interquartile Range of Relative Improvement to Init': None,
+        'Lower Quartile of Relative Improvement to Init': None,
+        'Upper Quartile of Relative Improvement to Init': None,
+        'Minimum of Relative Improvement to Init': None,
+        'Maximum of Relative Improvement to Init': None,
         'Mean Per Iter Improvement': None,
-        'Median Per Iter Improvement': None, 
-        'Standard Deviation of Per Iter Improvement': None, 
-        'Interquartile Range of Per Iter Improvement': None 
+        'Median Per Iter Improvement': None,
+        'Standard Deviation of Per Iter Improvement': None,
+        'Interquartile Range of Per Iter Improvement': None,
+        'Lower Quartile of Per Iter Improvement': None,
+        'Upper Quartile of Per Iter Improvement': None,
+        'Minimum of Per Iter Improvement': None,
+        'Maximum of Per Iter Improvement': None
     }
     
     #The argument which contains the information about which score summaries to compute. Allows for any parametrisation required also (probably wouldn't be required)

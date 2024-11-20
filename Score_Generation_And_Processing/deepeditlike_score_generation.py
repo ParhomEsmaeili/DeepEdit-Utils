@@ -335,7 +335,7 @@ class test_scores():
                 # e.g. is it an editing iteration or an initialisation iteration, and the name of the iteration (e.g. iteration_1, final_iteration, interactive [initialisation], autoseg)
 
                 
-                iter_infos = [[infer_run_mode[0].lower(), 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
+                iter_infos = [['final', 'dummy']] #we use a dummy for the iter_name because it is assumed that each sublist is length 2: iter_type, iter_name 
                 guidance_points_dict_init, guidance_points_init_parametrisations = guide_utils.guidance_dict_info(guidance_json_folder, image_no_ext, iter_infos, weightmap_parametrisations, sequentiality_mode, config_labels)
                 
                 #Appending the number of points
@@ -367,9 +367,9 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(scores[class_label])
+                        with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(scores[class_label])
 
                     with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)
@@ -578,9 +578,9 @@ class test_scores():
                             if class_label.title() == "Background":
                                 continue 
                             
-                            with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(scores[class_label])
+                        with open(os.path.join(results_save_dir, f'class_{class_label}_{base_metric}_score_results.csv'),'a') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(scores[class_label])
 
                     with open(os.path.join(results_save_dir, f'{base_metric}_score_results.csv'),'a') as f:
                         writer = csv.writer(f)

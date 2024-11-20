@@ -82,26 +82,23 @@ class pure_dice_relative_score_summarisation():
                                      'Median Relative Improvement to Init',
                                      'Standard Deviation of Relative Improvement to Init',
                                      'Interquartile Range of Relative Improvement to Init',
+                                     'Lower Quartile of Relative Improvement to Init',
+                                     'Upper Quartile of Relative Improvement to Init',
+                                     'Minimum of Relative Improvement to Init',
+                                     'Maximum of Relative Improvement to Init',
                                      'Mean Per Iter Improvement',
                                      'Median Per Iter Improvement',
                                      'Standard Deviation of Per Iter Improvement',
                                      'Interquartile Range of Per Iter Improvement',
+                                     'Lower Quartile of Per Iter Improvement',
+                                     'Upper Quartile of Per Iter Improvement',
+                                     'Minimum of Per Iter Improvement',
+                                     'Maximum of Per Iter Improvement'
                                      ]
         
         supported_simulation_types = ['probabilistic',
                                       'deterministic']
-        '''
-        Corresponding parametrisations:
-
-        click weightmaps:
-
-        none: none 
-
-        gt_weightmaps:
         
-        none: none 
-
-        '''
         return supported_initialisations, supported_click_weightmaps, supported_gt_weightmaps, supported_human_measures, supported_base_metrics, supported_score_summaries, supported_simulation_types
           
 
@@ -175,37 +172,6 @@ class pure_dice_relative_score_summarisation():
 
         return relative_improv_scores, per_iter_improvement 
 
-    # def per_sample_averaging(self, scores):
-        
-    #     num_experiments = len(self.infer_run_nums)
-
-    #     #we assume the image names are still there in the first index! 
-    #     output = [scores[0]] 
-
-    #     #We filter the nan scores when computing averages, if for each sample there is not a non-nan score then just continue..
-
-    #     for sublist in scores[1:]:
-            
-    #         current_iter_averaged = [] 
-
-    #         for index in range(self.num_samples):
-    #             experiment_values = [sublist[j * self.num_samples + index] for j in range(num_experiments)]
-                
-    #             if not self.include_nan:
-    #                 non_nan_vals = [val for val in experiment_values if not math.isnan(float(val))]
-    #                 if len(non_nan_vals)  == 0:
-    #                     #in this case just skip to the next sample 
-    #                     continue 
-    #                 else:
-    #                     #in this case, we used the filtered out nan values and average.
-    #                     per_sample_mean = np.mean(non_nan_vals)
-    #                     current_iter_averaged.append(per_sample_mean)
-
-    #         #We then append the per sample averaged scores for that iteration.    
-    #         output.append(current_iter_averaged)
-
-    #     return output 
-
     def score_summarisation(self, results_summarisation_dir, filename, relative_improv_scores, per_iter_improv_scores):
         
         
@@ -214,14 +180,6 @@ class pure_dice_relative_score_summarisation():
         for key in self.summary_dict.keys():
             parametrisation = self.summary_dict[key] 
 
-            # if key.title() == 'Mean':
-
-            #     summarised_output[key] = self.compute_mean(just_scores, parametrisation)
-
-            # elif key.title() == "Median":
-
-            #     summarised_output[key] = self.compute_median(just_scores, parametrisation)
-
             if key.title() == "Standard Deviation of Relative Improvement To Init":
 
                summarised_output[key] = self.compute_standard_dev(relative_improv_scores[1:], parametrisation)
@@ -229,6 +187,22 @@ class pure_dice_relative_score_summarisation():
             elif key.title() == "Interquartile Range of Relative Improvement To Init":
                 
                 summarised_output[key] = self.compute_iqr(relative_improv_scores[1:], parametrisation) 
+
+            elif key.title() == 'Lower Quartile of Relative Improvement to Init':
+
+                summarised_output[key] = self.compute_lower_quartile(relative_improv_scores[1:], parametrisation)
+
+            elif key.title() == 'Upper Quartile of Relative Improvement to Init':
+
+                summarised_output[key] = self.compute_upper_quartile(relative_improv_scores[1:], parametrisation)
+                
+            elif key.title() == 'Minimum of Relative Improvement to Init':
+
+                summarised_output[key] = self.compute_minimum(relative_improv_scores[1:], parametrisation)
+            
+            elif key.title() == 'Maximum of Relative Improvement to Init':
+                
+                summarised_output[key] = self.compute_maximum(relative_improv_scores[1:], parametrisation)
 
             elif key.title() == "Mean Relative Improvement To Init":
 
@@ -247,6 +221,22 @@ class pure_dice_relative_score_summarisation():
     
                 summarised_output[key] = self.compute_iqr(per_iter_improv_scores[1:], parametrisation) 
 
+            elif key.title() == 'Lower Quartile of Per Iter Improvement':
+
+                summarised_output[key] = self.compute_lower_quartile(per_iter_improv_scores[1:], parametrisation)
+
+            elif key.title() == 'Upper Quartile of Per Iter Improvement':
+
+                summarised_output[key] = self.compute_upper_quartile(per_iter_improv_scores[1:], parametrisation)
+                
+            elif key.title() == 'Minimum of Per Iter Improvement':
+
+                summarised_output[key] = self.compute_minimum(per_iter_improv_scores[1:], parametrisation)
+            
+            elif key.title() == 'Maximum of Per Iter Improvement':
+                
+                summarised_output[key] = self.compute_maximum(per_iter_improv_scores[1:], parametrisation)
+             
             elif key.title() == "Mean Per Iter Improvement":
 
                 summarised_output[key] = self.compute_mean(per_iter_improv_scores[1:], parametrisation)
@@ -293,27 +283,22 @@ class pure_dice_relative_score_summarisation():
 
         return [np.percentile(sublist, 75) - np.percentile(sublist, 25) for sublist in output_scores]
     
-    # def compute_relative_improvement(self, output_scores, parametrisation):
-    #     #This is relative to the initialisation score!
-    #     #This requires the number of samples to be consistent throughout! 
-        
-    #     num_scores = len(output_scores[0])
-    #     for score_list in output_scores:
-    #         assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the relative to initialisation score improvement computation" 
+    def compute_upper_quartile(self, output_scores, parametrisation):
 
-    #     initialisation = np.array(output_scores[0])
-    #     return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - initialisation for sublist in output_scores[1:]]
+        return [np.percentile([val for val in sublist if not math.isnan(val)], 75) for sublist in output_scores]
+    
+    def compute_lower_quartile(self, output_scores, parametrisation):
 
-    # def compute_per_iter_improvement(self, output_scores, parametrisation):
-    #     #This is all relative to the prior iteration's dice score. 
+        return [np.percentile([val for val in sublist if not math.isnan(val)], 25) for sublist in output_scores]
+    
+    def compute_minimum(self, output_scores, parametrisation):
 
-    #     num_scores = len(output_scores[0])
-        
-    #     for score_list in output_scores:
-    #         assert len(score_list) == num_scores, "There was an incongruence in the number of scores provided per iteration, for the per-iteration relative improvement score generation"
+        return [np.min([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
+    
+    def compute_maximum(self, output_scores, parametrisation):
 
-    #     return [np.array([float('nan')] * num_scores)] + [np.array(sublist) - output_scores[i] for i,sublist in enumerate(output_scores[1:])]
-
+        return [np.max([val for val in sublist if not math.isnan(val)]) for sublist in output_scores]
+    
     def __call__(self):
     
         inference_config_dict = dict() 
